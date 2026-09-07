@@ -1,16 +1,12 @@
 /**
  * Панель параметров: уровень изделия и уровень выделенного поля.
- * Все списки берутся из справочников системы — недопустимые варианты не показываются.
+ * Списки берутся из настроек системы — недопустимые варианты не показываются.
  */
-import type { CalcResult, FieldFill, OpeningType, ProductInput } from '../core/types'
+import { useState } from 'react'
+import type { CalcResult, FieldFill, ProductInput } from '../core/types'
 import { useCatalog } from '../store/catalog'
 import { findNode, parentSplit, removeSplit, setFill, splitField } from '../core/scene'
-
-const OPENINGS: { value: OpeningType; label: string }[] = [
-  { value: 'turn', label: 'Поворотная' },
-  { value: 'turnTilt', label: 'Поворотно-откидная' },
-  { value: 'tilt', label: 'Откидная (фрамуга)' },
-]
+import { HardwareDialog } from './HardwareDialog'
 
 interface Props {
   item: ProductInput
@@ -22,15 +18,24 @@ interface Props {
 
 export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: Props) {
   const { catalog } = useCatalog()
+  const [hardwareOpen, setHardwareOpen] = useState(false)
+
   const system = catalog.systems.find((s) => s.id === item.systemId)!
   const glazings = catalog.glazings.filter((g) => system.glazingIds.includes(g.id))
-  const hardware = catalog.hardware.filter((h) => system.hardwareVariantIds.includes(h.id))
+  const productParams = catalog.params.filter(
+    (p) => system.paramIds.includes(p.id) && p.level === 'product' && !p.hidden,
+  )
+  const sashParamDefs = catalog.params.filter(
+    (p) => system.paramIds.includes(p.id) && p.level === 'sash' && !p.hidden,
+  )
+
   const node = selectedId ? findNode(item.root, selectedId) : null
   const field = node && node.kind === 'field' ? node : null
   // Отдельная константа: сужение типа внутри обработчиков-замыканий не сохраняется.
   const sashFill = field && field.fill.type === 'sash' ? field.fill : null
   const split = selectedId ? parentSplit(item.root, selectedId) : null
   const contour = calc.contours.find((c) => c.fieldId === selectedId)
+  const glazing = calc.glazings.find((g) => g.fieldId === selectedId)
 
   const patch = (p: Partial<ProductInput>) => onChange({ ...item, ...p })
 
@@ -38,12 +43,13 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
     const next = catalog.systems.find((s) => s.id === systemId)!
     // Заполнения и фурнитура принадлежат системе: при смене приводим к допустимым.
     const fixFill = (fill: FieldFill): FieldFill => {
-      const glazingId = next.glazingIds.includes(fill.glazingId) ? fill.glazingId : next.glazingIds[0]
+      const glazingId = !fill.glazingId || next.glazingIds.includes(fill.glazingId) ? fill.glazingId : next.glazingIds[0]
       if (fill.type === 'glass') return { type: 'glass', glazingId }
       const variant = next.hardwareVariantIds.includes(fill.hardwareVariantId)
         ? fill.hardwareVariantId
         : (catalog.hardware.find((h) => next.hardwareVariantIds.includes(h.id) && h.opening === fill.opening)?.id ??
-          next.hardwareVariantIds[0])
+          next.hardwareVariantIds[0] ??
+          '')
       return { ...fill, glazingId, hardwareVariantId: variant }
     }
     const walk = (n: ProductInput['root']): ProductInput['root'] =>
@@ -54,18 +60,6 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
   const setFieldFill = (fill: FieldFill) => {
     if (!selectedId) return
     onChange({ ...item, root: setFill(item.root, selectedId, fill) })
-  }
-
-  const makeSash = (opening: OpeningType) => {
-    if (!field) return
-    const variant = hardware.find((h) => h.opening === opening) ?? hardware[0]
-    setFieldFill({
-      type: 'sash',
-      opening,
-      handle: field.fill.type === 'sash' ? field.fill.handle : 'right',
-      glazingId: field.fill.glazingId,
-      hardwareVariantId: variant.id,
-    })
   }
 
   return (
@@ -100,7 +94,6 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
               value={item.width}
               min={300}
               max={4000}
-              step={1}
               onChange={(e) => patch({ width: clampInt(e.target.value, 300, 4000, item.width) })}
             />
           </label>
@@ -111,7 +104,6 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
               value={item.height}
               min={300}
               max={4000}
-              step={1}
               onChange={(e) => patch({ height: clampInt(e.target.value, 300, 4000, item.height) })}
             />
           </label>
@@ -126,30 +118,51 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
             />
           </label>
         </div>
-        {system.params
-          .filter((p) => p.level === 'product')
-          .map((p) => (
-            <label key={p.name}>
-              {p.name}
-              <select
-                value={item.params[p.name] ?? p.values[0]}
-                onChange={(e) => patch({ params: { ...item.params, [p.name]: e.target.value } })}
-              >
-                {p.values.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
+        {productParams.map((p) => (
+          <label key={p.id}>
+            {p.name}
+            <select
+              value={item.params[p.id] ?? p.defaultValue}
+              onChange={(e) => patch({ params: { ...item.params, [p.id]: e.target.value } })}
+            >
+              {p.values
+                .slice()
+                .sort((a, b) => a.order - b.order)
+                .map((v) => (
+                  <option key={v.id} value={v.value}>
+                    {v.value}
                   </option>
                 ))}
-              </select>
-            </label>
-          ))}
+            </select>
+          </label>
+        ))}
       </section>
 
       <section>
         <h3>Поле {field ? '' : '— не выбрано'}</h3>
-        {!field && <p className="hint">Кликните по полю на чертеже, чтобы задать заполнение или вставить створку.</p>}
+        {!field && <p className="hint">Кликните по полю на чертеже, чтобы вставить створку или задать заполнение.</p>}
         {field && (
           <>
+            <div className="btn-row">
+              {sashFill ? (
+                <>
+                  <button className="primary" onClick={() => setHardwareOpen(true)}>
+                    Фурнитура…
+                  </button>
+                  <button
+                    className="danger"
+                    onClick={() => setFieldFill({ type: 'glass', glazingId: sashFill.glazingId })}
+                  >
+                    Убрать створку
+                  </button>
+                </>
+              ) : (
+                <button className="primary" onClick={() => setHardwareOpen(true)}>
+                  Вставить створку…
+                </button>
+              )}
+            </div>
+
             <div className="btn-row">
               <button onClick={() => onChange({ ...item, root: splitField(item.root, field.id, 'v') })}>
                 Импост вертикальный
@@ -178,28 +191,10 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
                 value={field.fill.glazingId}
                 onChange={(e) => setFieldFill({ ...field.fill, glazingId: e.target.value })}
               >
+                <option value="">— без заполнения —</option>
                 {glazings.map((g) => (
                   <option key={g.id} value={g.id}>
                     {g.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Тип поля
-              <select
-                value={field.fill.type === 'glass' ? 'glass' : field.fill.opening}
-                onChange={(e) =>
-                  e.target.value === 'glass'
-                    ? setFieldFill({ type: 'glass', glazingId: field.fill.glazingId })
-                    : makeSash(e.target.value as OpeningType)
-                }
-              >
-                <option value="glass">Глухое</option>
-                {OPENINGS.filter((o) => hardware.some((h) => h.opening === o.value)).map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
                   </option>
                 ))}
               </select>
@@ -217,21 +212,26 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
                     <option value="left">Слева (петли справа)</option>
                   </select>
                 </label>
-                <label>
-                  Вариант фурнитуры
-                  <select
-                    value={sashFill.hardwareVariantId}
-                    onChange={(e) => setFieldFill({ ...sashFill, hardwareVariantId: e.target.value })}
-                  >
-                    {hardware
-                      .filter((h) => h.opening === sashFill.opening)
-                      .map((h) => (
-                        <option key={h.id} value={h.id}>
-                          {h.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                {sashParamDefs.map((p) => (
+                  <label key={p.id}>
+                    {p.name}
+                    <select
+                      value={sashFill.params?.[p.id] ?? p.defaultValue}
+                      onChange={(e) =>
+                        setFieldFill({ ...sashFill, params: { ...(sashFill.params ?? {}), [p.id]: e.target.value } })
+                      }
+                    >
+                      {p.values
+                        .slice()
+                        .sort((a, b) => a.order - b.order)
+                        .map((v) => (
+                          <option key={v.id} value={v.value}>
+                            {v.value}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ))}
               </>
             )}
 
@@ -249,31 +249,47 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
                     {contour.falz.w} × {contour.falz.h} мм
                   </dd>
                 </div>
+                <div>
+                  <dt>Масса створки</dt>
+                  <dd>{(contour.massKg ?? 0).toFixed(1)} кг</dd>
+                </div>
+                <div>
+                  <dt>Фурнитура</dt>
+                  <dd>{catalog.hardware.find((h) => h.id === contour.hardwareVariantId)?.name ?? '—'}</dd>
+                </div>
               </dl>
             )}
-            {(() => {
-              const glazing = calc.glazings.find((g) => g.fieldId === field.id)
-              if (!glazing) return null
-              return (
-                <dl className="facts">
-                  <div>
-                    <dt>Стеклопакет</dt>
-                    <dd>
-                      {glazing.size.w} × {glazing.size.h} мм
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Площадь / масса</dt>
-                    <dd>
-                      {glazing.areaM2.toFixed(3)} м² / {glazing.massKg.toFixed(1)} кг
-                    </dd>
-                  </div>
-                </dl>
-              )
-            })()}
+            <dl className="facts">
+              <div>
+                <dt>Стеклопакет</dt>
+                <dd>{glazing ? `${glazing.size.w} × ${glazing.size.h} мм` : 'без заполнения'}</dd>
+              </div>
+              {glazing && (
+                <div>
+                  <dt>Площадь / масса</dt>
+                  <dd>
+                    {glazing.areaM2.toFixed(3)} м² / {glazing.massKg.toFixed(1)} кг
+                  </dd>
+                </div>
+              )}
+            </dl>
           </>
         )}
       </section>
+
+      {hardwareOpen && field && (
+        <HardwareDialog
+          item={item}
+          fieldId={field.id}
+          catalog={catalog}
+          current={sashFill}
+          onCancel={() => setHardwareOpen(false)}
+          onApply={(fill) => {
+            setFieldFill(fill)
+            setHardwareOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }

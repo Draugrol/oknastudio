@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Catalog } from '../core/types'
 import { defaultCatalog } from '../catalog/defaults'
 
-const KEY = 'oknastudio.catalog.v2'
+const KEY = 'oknastudio.catalog.v3'
 
 function load(): Catalog {
   try {

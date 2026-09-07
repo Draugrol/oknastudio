@@ -31,7 +31,7 @@ export interface Order {
   items: ProductInput[]
 }
 
-const KEY = 'oknastudio.orders.v1'
+const KEY = 'oknastudio.orders.v2'
 
 function seed(): Order[] {
   const catalog = getCatalog()
@@ -52,6 +52,9 @@ function seed(): Order[] {
         handle: 'right',
         glazingId,
         hardwareVariantId: hardware?.id ?? '',
+        params: Object.fromEntries(
+          catalog.params.filter((p) => p.level === 'sash').map((p) => [p.id, p.defaultValue]),
+        ),
       },
     },
   }

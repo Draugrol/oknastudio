@@ -97,6 +97,19 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
   const neighbors: Neighbors = { left: 'frame', right: 'frame', top: 'frame', bottom: 'frame' }
   walk(input.root, frameLight, neighbors)
 
+  // Масса створки: профили её контура + заполнение поля (ограничение варианта фурнитуры).
+  for (const contour of contours) {
+    if (contour.kind !== 'sash') continue
+    const profileMass = elements
+      .filter((e) => e.contourId === contour.id)
+      .reduce((acc, e) => {
+        const geom = catalog.materials.find((m) => m.id === e.materialId)?.geometry
+        return acc + ((geom?.massPerMeter ?? 0) * e.length) / 1000
+      }, 0)
+    const glassMass = glazings.filter((g) => g.fieldId === contour.fieldId).reduce((acc, g) => acc + g.massKg, 0)
+    contour.massKg = Math.round((profileMass + glassMass) * 10) / 10
+  }
+
   return { contours, elements, glazings, fields, splits, imposts, issues }
 
   /* ───────────────────────── обход дерева деления ───────────────────────── */
@@ -155,6 +168,8 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
     fields.push({ id: node.id, rect: region, neighbors: { ...nb } })
 
     if (node.fill.type === 'glass') {
+      // Пустой проём: поле без заполнения — стеклопакет не считается.
+      if (!node.fill.glazingId) return
       const filling = fillingOf(frameContour!)
       glazings.push(makeGlazing(node.id, node.fill.glazingId, expandByFilling(region, filling?.dW, filling?.dH), filling?.id))
       return
@@ -189,11 +204,13 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
       opening: node.fill.opening,
       handle: node.fill.handle,
       hardwareVariantId: node.fill.hardwareVariantId,
+      params: { ...node.fill.params },
       // Фальцевый размер створки = световой проём родителя (габарит минус наплав).
       falz: { w: round(region.w), h: round(region.h) },
     })
     elements.push(...contourElements(contourId, sashContour, sashRect))
 
+    if (!node.fill.glazingId) return
     const filling = fillingOf(sashContour)
     glazings.push(
       makeGlazing(node.id, node.fill.glazingId, expandByFilling(sashLight, filling?.dW, filling?.dH), filling?.id),

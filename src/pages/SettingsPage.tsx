@@ -4,12 +4,13 @@
  * Фурнитура · Профили (профильные системы с деревом и вкладками).
  */
 import { useRef, useState } from 'react'
-import type { Catalog, MaterialKind, OpeningType } from '../core/types'
+import type { Catalog, MaterialKind, OpeningType, Param } from '../core/types'
 import { useCatalog, newId } from '../store/catalog'
 import { CheckCell, NumCell, RowToolbar, SelectCell, TextCell } from '../settings/grid'
+import { ConditionsEditor, conditionsText } from '../settings/ConditionsEditor'
 import { SystemEditor } from '../settings/SystemEditor'
 
-const SECTIONS = ['Профили', 'Материалы', 'Цвета', 'Заполнения', 'Фурнитура'] as const
+const SECTIONS = ['Профили', 'Параметры', 'Материалы', 'Цвета', 'Заполнения', 'Фурнитура'] as const
 type Section = (typeof SECTIONS)[number]
 
 const KIND_OPTIONS: { value: MaterialKind; label: string }[] = [
@@ -110,7 +111,7 @@ export function SettingsPage() {
                     group: 'Без группы',
                     enabled: true,
                     buildFrom: 'inside',
-                    params: [],
+                    paramIds: draft.params.map((p) => p.id),
                     contours: [],
                     profiles: [],
                     adjacencies: [],
@@ -167,6 +168,7 @@ export function SettingsPage() {
         </div>
       )}
 
+      {section === 'Параметры' && <ParamsEditor catalog={catalog} update={update} />}
       {section === 'Материалы' && <MaterialsEditor catalog={catalog} update={update} />}
       {section === 'Цвета' && <ColorsEditor catalog={catalog} update={update} />}
       {section === 'Заполнения' && <GlazingsEditor catalog={catalog} update={update} />}
@@ -176,6 +178,184 @@ export function SettingsPage() {
 }
 
 type Update = (mutator: (draft: Catalog) => void) => void
+
+/* ───────────────────────────── Параметры ───────────────────────────── */
+
+function ParamsEditor({ catalog, update }: { catalog: Catalog; update: Update }) {
+  const [selected, setSelected] = useState<string>(catalog.params[0]?.id ?? '')
+  const param = catalog.params.find((p) => p.id === selected) ?? catalog.params[0]
+
+  const usage = (id: string) => {
+    const inSpec = (list: { conditions?: { paramId: string }[] }[]) =>
+      list.some((i) => i.conditions?.some((c) => c.paramId === id))
+    return (
+      catalog.systems.some(
+        (sys) =>
+          inSpec(sys.spec) ||
+          sys.profiles.some((pr) => inSpec(pr.spec)) ||
+          sys.fillings.some((f) => inSpec(f.spec)),
+      ) || catalog.hardware.some((h) => h.ranges.some((r) => inSpec(r.items)))
+    )
+  }
+
+  return (
+    <section>
+      <RowToolbar
+        title="Параметры"
+        hasSelection={!!param}
+        onAdd={() =>
+          update((draft) => {
+            const id = newId('PAR')
+            draft.params.push({
+              id,
+              name: 'Новый параметр',
+              hidden: false,
+              level: 'sash',
+              defaultValue: 'Значение 1',
+              values: [{ id: newId('PV'), value: 'Значение 1', order: 1 }],
+            })
+            draft.systems.forEach((sys) => sys.paramIds.push(id))
+            setSelected(id)
+          })
+        }
+        onCopy={() =>
+          update((draft) => {
+            const src = draft.params.find((x) => x.id === param?.id)
+            if (!src) return
+            const copy = structuredClone(src)
+            copy.id = newId('PAR')
+            copy.name = `${src.name} (копия)`
+            copy.values = copy.values.map((v) => ({ ...v, id: newId('PV') }))
+            draft.params.push(copy)
+            setSelected(copy.id)
+          })
+        }
+        onDelete={() => {
+          if (param && usage(param.id)) {
+            alert('Параметр используется в условиях спецификации или фурнитуры — сначала уберите ссылки на него.')
+            return
+          }
+          update((draft) => {
+            draft.params = draft.params.filter((x) => x.id !== param?.id)
+            draft.systems.forEach((sys) => (sys.paramIds = sys.paramIds.filter((x) => x !== param?.id)))
+            setSelected(draft.params[0]?.id ?? '')
+          })
+        }}
+      />
+      <table className="grid edit">
+        <thead>
+          <tr>
+            <th>Наименование</th>
+            <th className="w-base">Уровень</th>
+            <th className="w-check">Скрытый</th>
+            <th className="w-base">По умолчанию</th>
+            <th className="w-num">Значений</th>
+          </tr>
+        </thead>
+        <tbody>
+          {catalog.params.map((row) => {
+            const set = (patch: Partial<Param>) =>
+              update((draft) => Object.assign(draft.params.find((x) => x.id === row.id)!, patch))
+            return (
+              <tr key={row.id} className={row.id === param?.id ? 'selected' : undefined} onClick={() => setSelected(row.id)} onFocusCapture={() => setSelected(row.id)}>
+                <td><TextCell value={row.name} onChange={(v) => set({ name: v })} /></td>
+                <td>
+                  <SelectCell
+                    value={row.level}
+                    options={[
+                      { value: 'sash', label: 'Створка' },
+                      { value: 'product', label: 'Изделие' },
+                    ]}
+                    onChange={(v) => set({ level: v as Param['level'] })}
+                  />
+                </td>
+                <td><CheckCell value={row.hidden} onChange={(v) => set({ hidden: v })} /></td>
+                <td>
+                  <SelectCell
+                    value={row.defaultValue}
+                    options={row.values.map((v) => ({ value: v.value, label: v.value }))}
+                    onChange={(v) => set({ defaultValue: v })}
+                  />
+                </td>
+                <td className="num muted">{row.values.length}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      {param && (
+        <div className="sub-grid">
+          <RowToolbar
+            title={`Значения параметра «${param.name}»`}
+            onAdd={() =>
+              update((draft) => {
+                const target = draft.params.find((x) => x.id === param.id)!
+                target.values.push({ id: newId('PV'), value: `Значение ${target.values.length + 1}`, order: target.values.length + 1 })
+              })
+            }
+          />
+          <table className="grid edit">
+            <thead>
+              <tr>
+                <th className="w-num">Порядок</th>
+                <th>Значение</th>
+                <th className="w-check" />
+              </tr>
+            </thead>
+            <tbody>
+              {param.values
+                .slice()
+                .sort((a, b) => a.order - b.order)
+                .map((v) => (
+                  <tr key={v.id}>
+                    <td>
+                      <NumCell
+                        value={v.order}
+                        onChange={(n) =>
+                          update((draft) => void (draft.params.find((x) => x.id === param.id)!.values.find((y) => y.id === v.id)!.order = n))
+                        }
+                      />
+                    </td>
+                    <td>
+                      <TextCell
+                        value={v.value}
+                        onChange={(n) =>
+                          update((draft) => {
+                            const target = draft.params.find((x) => x.id === param.id)!
+                            const old = target.values.find((y) => y.id === v.id)!.value
+                            target.values.find((y) => y.id === v.id)!.value = n
+                            if (target.defaultValue === old) target.defaultValue = n
+                          })
+                        }
+                      />
+                    </td>
+                    <td>
+                      <button
+                        className="link danger"
+                        onClick={() =>
+                          update((draft) => {
+                            const target = draft.params.find((x) => x.id === param.id)!
+                            target.values = target.values.filter((y) => y.id !== v.id)
+                          })
+                        }
+                      >
+                        удалить
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="hint">
+        Параметры задаются в конструкторе (у изделия или у створки), а строки спецификации и
+        комплектов фурнитуры отбираются условиями вида [Цвет ручки = Белый].
+      </p>
+    </section>
+  )
+}
 
 /* ───────────────────────────── Материалы ───────────────────────────── */
 
@@ -264,7 +444,7 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
                 target.geometry = { faceWidth: 0, depth: 0, massPerMeter: 0, ...target.geometry, ...patch }
               })
             return (
-              <tr key={m.id} className={m.id === selected ? 'selected' : undefined} onClick={() => setSelected(m.id)}>
+              <tr key={m.id} className={m.id === selected ? 'selected' : undefined} onClick={() => setSelected(m.id)} onFocusCapture={() => setSelected(m.id)}>
                 <td><TextCell value={m.code} onChange={(v) => set({ code: v })} /></td>
                 <td><TextCell value={m.name} onChange={(v) => set({ name: v })} /></td>
                 <td><TextCell value={m.group} onChange={(v) => set({ group: v })} /></td>
@@ -338,7 +518,7 @@ function ColorsEditor({ catalog, update }: { catalog: Catalog; update: Update })
             const setRender = (patch: Partial<typeof c.render>) =>
               update((draft) => Object.assign(draft.colors.find((x) => x.id === c.id)!.render, patch))
             return (
-              <tr key={c.id} className={c.id === selected ? 'selected' : undefined} onClick={() => setSelected(c.id)}>
+              <tr key={c.id} className={c.id === selected ? 'selected' : undefined} onClick={() => setSelected(c.id)} onFocusCapture={() => setSelected(c.id)}>
                 <td><TextCell value={c.name} onChange={(v) => set({ name: v })} /></td>
                 <td><NumCell value={c.markup} step={0.01} min={0} onChange={(v) => set({ markup: v })} /></td>
                 <td><input className="cell color" type="color" value={c.render.outer} onChange={(e) => setRender({ outer: e.target.value })} /></td>
@@ -415,7 +595,7 @@ function GlazingsEditor({ catalog, update }: { catalog: Catalog; update: Update 
             const set = (patch: Partial<typeof g.applicability>) =>
               update((draft) => Object.assign(draft.glazings.find((x) => x.id === g.id)!.applicability, patch))
             return (
-              <tr key={g.id} className={g.id === glazing?.id ? 'selected' : undefined} onClick={() => setSelected(g.id)}>
+              <tr key={g.id} className={g.id === glazing?.id ? 'selected' : undefined} onClick={() => setSelected(g.id)} onFocusCapture={() => setSelected(g.id)}>
                 <td>
                   <TextCell
                     value={g.name}
@@ -519,8 +699,10 @@ function GlazingsEditor({ catalog, update }: { catalog: Catalog; update: Update 
 function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update }) {
   const [variantId, setVariantId] = useState<string>(catalog.hardware[0]?.id ?? '')
   const [rangeId, setRangeId] = useState<string>(catalog.hardware[0]?.ranges[0]?.id ?? '')
+  const [itemId, setItemId] = useState<string>('')
   const variant = catalog.hardware.find((h) => h.id === variantId) ?? catalog.hardware[0]
   const range = variant?.ranges.find((r) => r.id === rangeId) ?? variant?.ranges[0]
+  const item = range?.items.find((i) => i.id === itemId) ?? null
   const materialOptions = catalog.materials.map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }))
 
   const mutateVariant = (fn: (v: NonNullable<typeof variant>) => void) =>
@@ -539,6 +721,7 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
             const id = newId('HW')
             draft.hardware.push({
               id,
+              brand: '',
               name: 'Новый вариант',
               opening: 'turn',
               maxSashMass: 80,
@@ -574,7 +757,8 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
       <table className="grid edit">
         <thead>
           <tr>
-            <th>Наименование</th>
+            <th className="w-code">Фурнитура</th>
+            <th>Комплектация</th>
             <th className="w-base">Открывание</th>
             <th className="w-num">Макс. ФШ</th>
             <th className="w-num">Макс. ФВ</th>
@@ -587,7 +771,8 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
             const set = (patch: Partial<typeof h>) =>
               update((draft) => Object.assign(draft.hardware.find((x) => x.id === h.id)!, patch))
             return (
-              <tr key={h.id} className={h.id === variant?.id ? 'selected' : undefined} onClick={() => setVariantId(h.id)}>
+              <tr key={h.id} className={h.id === variant?.id ? 'selected' : undefined} onClick={() => setVariantId(h.id)} onFocusCapture={() => setVariantId(h.id)}>
+                <td><TextCell value={h.brand} placeholder="MACO" onChange={(v) => set({ brand: v })} /></td>
                 <td><TextCell value={h.name} onChange={(v) => set({ name: v })} /></td>
                 <td><SelectCell value={h.opening} options={OPENING_OPTIONS} onChange={(v) => set({ opening: v as OpeningType })} /></td>
                 <td><NumCell value={h.maxFw} onChange={(v) => set({ maxFw: v })} /></td>
@@ -645,7 +830,7 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
                 const setRange = (patch: { fw?: [number, number]; fh?: [number, number] }) =>
                   mutateVariant((v) => Object.assign(v.ranges.find((x) => x.id === r.id)!, patch))
                 return (
-                  <tr key={r.id} className={r.id === range?.id ? 'selected' : undefined} onClick={() => setRangeId(r.id)}>
+                  <tr key={r.id} className={r.id === range?.id ? 'selected' : undefined} onClick={() => setRangeId(r.id)} onFocusCapture={() => setRangeId(r.id)}>
                     <td><NumCell value={r.fw[0]} onChange={(v) => setRange({ fw: [v, r.fw[1]] })} /></td>
                     <td><NumCell value={r.fw[1]} onChange={(v) => setRange({ fw: [r.fw[0], v] })} /></td>
                     <td><NumCell value={r.fh[0]} onChange={(v) => setRange({ fh: [v, r.fh[1]] })} /></td>
@@ -669,7 +854,7 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
                   mutateVariant((v) =>
                     v.ranges
                       .find((r) => r.id === range.id)!
-                      .items.push({ id: newId('HI'), materialId: materialOptions[0]?.value ?? '', qty: 1 }),
+                      .items.push({ id: newId('HI'), materialId: materialOptions[0]?.value ?? '', qty: 1, conditions: [] }),
                   )
                 }
               />
@@ -678,12 +863,17 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
                   <tr>
                     <th>Материал</th>
                     <th className="w-num">Кол-во</th>
+                    <th className="w-params">Параметры</th>
                     <th className="w-check" />
                   </tr>
                 </thead>
                 <tbody>
                   {range.items.map((it) => (
-                    <tr key={it.id}>
+                    <tr
+                      key={it.id}
+                      className={it.id === itemId ? 'selected' : undefined}
+                      onClick={() => setItemId(it.id)} onFocusCapture={() => setItemId(it.id)}
+                    >
                       <td>
                         <SelectCell
                           value={it.materialId}
@@ -706,6 +896,7 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
                           }
                         />
                       </td>
+                      <td className="muted cond-text">{conditionsText(it.conditions, catalog) || '—'}</td>
                       <td>
                         <button
                           className="link danger"
@@ -723,6 +914,20 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
                   ))}
                 </tbody>
               </table>
+              {item && (
+                <ConditionsEditor
+                  title={`Параметры позиции «${catalog.materials.find((m) => m.id === item.materialId)?.name ?? ''}»`}
+                  conditions={item.conditions ?? []}
+                  catalog={catalog}
+                  onChange={(fn) =>
+                    mutateVariant((variantDraft) => {
+                      const target = variantDraft.ranges.find((r) => r.id === range.id)!.items.find((x) => x.id === item.id)!
+                      target.conditions = target.conditions ?? []
+                      fn(target.conditions)
+                    })
+                  }
+                />
+              )}
             </>
           )}
         </div>

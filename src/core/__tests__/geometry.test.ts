@@ -21,6 +21,7 @@ function singleSash(cat: Catalog = catalog): ProductInput {
       handle: 'right',
       glazingId: 'GL-24-STD',
       hardwareVariantId: 'HW-TT-STD',
+      params: {},
     }),
   }
 }
@@ -114,7 +115,7 @@ describe('правка справочника меняет расчёт', () => 
     const frame = system.profiles.find((p) => p.role === 'frame')!
     const item: SpecItem = {
       id: 'SI-TEST', enabled: true, materialId: 'W-WELD', colorRule: 'none',
-      count: 2, base: 'total', size: 0, coef: 1, step: 0, dim: '0D',
+      count: 2, base: 'total', size: 0, coef: 1, step: 0, dim: '0D', conditions: [],
     }
     const before = calcProduct(singleSash(cat), cat).price
     frame.spec.push(item)
@@ -141,10 +142,91 @@ describe('правка справочника меняет расчёт', () => 
   })
 })
 
+describe('параметры и условия', () => {
+  const sashWith = (params: Record<string, string>): ProductInput => {
+    const product = singleSash()
+    const fieldId = listFields(product.root)[0]
+    return {
+      ...product,
+      root: setFill(product.root, fieldId, {
+        type: 'sash', opening: 'turnTilt', handle: 'right',
+        glazingId: 'GL-24-STD', hardwareVariantId: 'HW-TT-STD', params,
+      }),
+    }
+  }
+
+  it('[Цвет ручки = Белый] ставит белую ручку, [= Коричневый] — коричневую', () => {
+    const white = calcProduct(sashWith({ 'PAR-HANDLE-COLOR': 'Белый' }), catalog).spec.map((l) => l.name)
+    const brown = calcProduct(sashWith({ 'PAR-HANDLE-COLOR': 'Коричневый' }), catalog).spec.map((l) => l.name)
+    expect(white).toContain('Ручка оконная белая')
+    expect(white).not.toContain('Ручка оконная коричневая')
+    expect(brown).toContain('Ручка оконная коричневая')
+    expect(brown).not.toContain('Ручка оконная белая')
+  })
+
+  it('незаданный параметр берётся из значения по умолчанию справочника', () => {
+    const names = calcProduct(sashWith({}), catalog).spec.map((l) => l.name)
+    expect(names).toContain('Ручка оконная белая')
+  })
+
+  it('[Детский замок = да] добавляет позицию, [= нет] — нет', () => {
+    const off = calcProduct(sashWith({ 'PAR-CHILD-LOCK': 'нет' }), catalog).spec.map((l) => l.name)
+    const on = calcProduct(sashWith({ 'PAR-CHILD-LOCK': 'да' }), catalog).spec.map((l) => l.name)
+    expect(off).not.toContain('Детский замок')
+    expect(on).toContain('Детский замок')
+  })
+
+  it('параметр изделия меняет строку спецификации профиля', () => {
+    const base = singleSash()
+    const black = calcProduct({ ...base, params: { 'PAR-SEAL-COLOR': 'Чёрный' } }, catalog).spec.map((l) => l.name)
+    const grey = calcProduct({ ...base, params: { 'PAR-SEAL-COLOR': 'Серый' } }, catalog).spec.map((l) => l.name)
+    expect(black).toContain('Уплотнитель рамный EPDM чёрный')
+    expect(grey).toContain('Уплотнитель рамный EPDM серый')
+    expect(grey).not.toContain('Уплотнитель рамный EPDM чёрный')
+  })
+
+  it('параметр створки перекрывает параметр изделия', () => {
+    const product = sashWith({ 'PAR-HANDLE-COLOR': 'Серебристый' })
+    const names = calcProduct({ ...product, params: { 'PAR-HANDLE-COLOR': 'Белый' } }, catalog).spec.map((l) => l.name)
+    expect(names).toContain('Ручка оконная серебристая')
+  })
+})
+
+describe('поле без заполнения', () => {
+  it('пустой проём не даёт стеклопакета и дешевле застеклённого', () => {
+    const glazed = newProduct(catalog, { width: 1000, height: 1000 })
+    const empty: ProductInput = {
+      ...glazed,
+      root: setFill(glazed.root, listFields(glazed.root)[0], { type: 'glass', glazingId: '' }),
+    }
+    const a = calcProduct(glazed, catalog)
+    const b = calcProduct(empty, catalog)
+    expect(a.glazings).toHaveLength(1)
+    expect(b.glazings).toHaveLength(0)
+    expect(b.price).toBeLessThan(a.price)
+    expect(b.issues).toEqual([])
+  })
+
+  it('створка без заполнения считается, но без СП', () => {
+    const product = singleSash()
+    const fieldId = listFields(product.root)[0]
+    const withoutGlass: ProductInput = {
+      ...product,
+      root: setFill(product.root, fieldId, {
+        type: 'sash', opening: 'turnTilt', handle: 'right',
+        glazingId: '', hardwareVariantId: 'HW-TT-STD', params: {},
+      }),
+    }
+    const calc = calcProduct(withoutGlass, catalog)
+    expect(calc.glazings).toHaveLength(0)
+    expect(calc.contours.filter((c) => c.kind === 'sash')).toHaveLength(1)
+  })
+})
+
 describe('движок спецификации «Вид расчёта»', () => {
   const item = (o: Partial<SpecItem>): SpecItem => ({
     id: 'X', enabled: true, materialId: 'M-REINF-FRAME', colorRule: 'none',
-    count: 1, base: 'length', size: 0, coef: 1, step: 0, dim: '1D', ...o,
+    count: 1, base: 'length', size: 0, coef: 1, step: 0, dim: '1D', conditions: [], ...o,
   })
 
   it('базы расчёта', () => {
@@ -195,7 +277,13 @@ describe('расчёт изделия целиком', () => {
   it('фурнитура подобрана по диапазону фальца 780×1480', () => {
     const names = calcProduct(singleSash(), catalog).spec.map((l) => l.name)
     expect(names).toContain('Комплект поворотно-откидной, большой')
-    expect(names).toContain('Ручка оконная')
+  })
+
+  it('масса створки считается по её профилям и заполнению', () => {
+    const calc = calcProduct(singleSash(), catalog)
+    const sash = calc.contours.find((c) => c.kind === 'sash')!
+    expect(sash.massKg).toBeGreaterThan(20)
+    expect(sash.massKg).toBeLessThan(calc.massKg)
   })
 
   it('наценка за цвет применяется только к окрашиваемым материалам', () => {

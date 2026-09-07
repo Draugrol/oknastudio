@@ -94,71 +94,37 @@ export function SystemEditor({
       )}
 
       {tab === 'Параметры' && (
-        <section>
-          <RowToolbar
-            title="Параметры системы"
-            hasSelection={!!pick('param')}
-            onAdd={() =>
-              mutate((s) =>
-                s.params.push({ id: newId('PP'), name: 'Новый параметр', values: ['Значение 1'], level: 'product' }),
-              )
-            }
-            onCopy={() =>
-              mutate((s) => {
-                const src = s.params.find((p) => p.id === pick('param'))
-                if (src) s.params.push({ ...structuredClone(src), id: newId('PP'), name: `${src.name} (копия)` })
-              })
-            }
-            onDelete={() => mutate((s) => void (s.params = s.params.filter((p) => p.id !== pick('param'))))}
-          />
-          <table className="grid edit">
-            <thead>
-              <tr>
-                <th>Наименование</th>
-                <th>Значения (через запятую)</th>
-                <th className="w-base">Уровень</th>
-              </tr>
-            </thead>
-            <tbody>
-              {system.params.map((p) => (
-                <tr key={p.id} className={p.id === pick('param') ? 'selected' : undefined} onClick={() => setPick('param', p.id)}>
-                  <td>
-                    <TextCell
-                      value={p.name}
-                      onChange={(v) => mutate((s) => void (s.params.find((x) => x.id === p.id)!.name = v))}
-                    />
-                  </td>
-                  <td>
-                    <TextCell
-                      value={p.values.join(', ')}
-                      onChange={(v) =>
-                        mutate(
-                          (s) =>
-                            void (s.params.find((x) => x.id === p.id)!.values = v
-                              .split(',')
-                              .map((x) => x.trim())
-                              .filter(Boolean)),
-                        )
-                      }
-                    />
-                  </td>
-                  <td>
-                    <SelectCell
-                      value={p.level}
-                      options={[
-                        { value: 'product', label: 'Изделие' },
-                        { value: 'contour', label: 'Контур' },
-                        { value: 'sash', label: 'Створка' },
-                      ]}
-                      onChange={(v) =>
-                        mutate((s) => void (s.params.find((x) => x.id === p.id)!.level = v as 'product' | 'contour' | 'sash'))
-                      }
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <section className="card">
+          <h3>Параметры, применимые к системе</h3>
+          <div className="check-list">
+            {catalog.params.map((param) => (
+              <label key={param.id} className="check-line">
+                <input
+                  type="checkbox"
+                  checked={system.paramIds.includes(param.id)}
+                  onChange={(e) =>
+                    mutate((s) => {
+                      s.paramIds = e.target.checked
+                        ? [...s.paramIds, param.id]
+                        : s.paramIds.filter((x) => x !== param.id)
+                    })
+                  }
+                />
+                {param.name}
+                <span className="muted">
+                  {' '}
+                  — {param.level === 'sash' ? 'створка' : 'изделие'}, по умолчанию «{param.defaultValue}»
+                  {param.hidden ? ', скрытый' : ''}
+                </span>
+              </label>
+            ))}
+            {!catalog.params.length && <p className="muted">Параметров нет — заведите их в разделе «Параметры».</p>}
+          </div>
+          <p className="hint">
+            Сами параметры и их значения заводятся в разделе «Параметры»; здесь отмечается,
+            какие из них доступны в этой системе. На параметры ссылаются условия строк
+            спецификации и комплектов фурнитуры.
+          </p>
         </section>
       )}
 
@@ -214,7 +180,7 @@ export function SystemEditor({
                 const set = (p: Partial<typeof c>) =>
                   mutate((s) => Object.assign(s.contours.find((x) => x.id === c.id)!, p))
                 return (
-                  <tr key={c.id} className={c.id === pick('contour') ? 'selected' : undefined} onClick={() => setPick('contour', c.id)}>
+                  <tr key={c.id} className={c.id === pick('contour') ? 'selected' : undefined} onClick={() => setPick('contour', c.id)} onFocusCapture={() => setPick('contour', c.id)}>
                     <td><CheckCell value={c.enabled} onChange={(v) => set({ enabled: v })} /></td>
                     <td><TextCell value={c.name} onChange={(v) => set({ name: v })} /></td>
                     <td><CheckCell value={c.isFrame} onChange={(v) => set({ isFrame: v })} /></td>
@@ -292,7 +258,7 @@ export function SystemEditor({
                   mutate((s) => Object.assign(s.profiles.find((x) => x.id === p.id)!, patch))
                 const geom = catalog.materials.find((m) => m.id === p.materialId)?.geometry
                 return (
-                  <tr key={p.id} className={p.id === profileId ? 'selected' : undefined} onClick={() => setProfileId(p.id)}>
+                  <tr key={p.id} className={p.id === profileId ? 'selected' : undefined} onClick={() => setProfileId(p.id)} onFocusCapture={() => setProfileId(p.id)}>
                     <td><CheckCell value={p.enabled} onChange={(v) => set({ enabled: v })} /></td>
                     <td><TextCell value={p.name} onChange={(v) => set({ name: v })} /></td>
                     <td><SelectCell value={p.role} options={ROLE_OPTIONS} onChange={(v) => set({ role: v as ProfileRole })} /></td>
@@ -346,7 +312,7 @@ export function SystemEditor({
                 const set = (patch: Partial<typeof a>) =>
                   mutate((s) => Object.assign(s.adjacencies.find((x) => x.id === a.id)!, patch))
                 return (
-                  <tr key={a.id} className={a.id === pick('adj') ? 'selected' : undefined} onClick={() => setPick('adj', a.id)}>
+                  <tr key={a.id} className={a.id === pick('adj') ? 'selected' : undefined} onClick={() => setPick('adj', a.id)} onFocusCapture={() => setPick('adj', a.id)}>
                     <td><CheckCell value={a.enabled} onChange={(v) => set({ enabled: v })} /></td>
                     <td><TextCell value={a.name} onChange={(v) => set({ name: v })} /></td>
                     <td><SelectCell value={a.parent} options={ROLE_OPTIONS} onChange={(v) => set({ parent: v as ProfileRole })} /></td>
@@ -395,7 +361,7 @@ export function SystemEditor({
                 const set = (patch: Partial<typeof j>) =>
                   mutate((s) => Object.assign(s.joints.find((x) => x.id === j.id)!, patch))
                 return (
-                  <tr key={j.id} className={j.id === pick('joint') ? 'selected' : undefined} onClick={() => setPick('joint', j.id)}>
+                  <tr key={j.id} className={j.id === pick('joint') ? 'selected' : undefined} onClick={() => setPick('joint', j.id)} onFocusCapture={() => setPick('joint', j.id)}>
                     <td><CheckCell value={j.enabled} onChange={(v) => set({ enabled: v })} /></td>
                     <td><TextCell value={j.name} onChange={(v) => set({ name: v })} /></td>
                     <td>
@@ -466,7 +432,7 @@ export function SystemEditor({
                 const set = (patch: Partial<typeof f>) =>
                   mutate((s) => Object.assign(s.fillings.find((x) => x.id === f.id)!, patch))
                 return (
-                  <tr key={f.id} className={f.id === fillingId ? 'selected' : undefined} onClick={() => setFillingId(f.id)}>
+                  <tr key={f.id} className={f.id === fillingId ? 'selected' : undefined} onClick={() => setFillingId(f.id)} onFocusCapture={() => setFillingId(f.id)}>
                     <td><CheckCell value={f.enabled} onChange={(v) => set({ enabled: v })} /></td>
                     <td><TextCell value={f.name} onChange={(v) => set({ name: v })} /></td>
                     <td>

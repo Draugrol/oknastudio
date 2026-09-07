@@ -11,6 +11,7 @@
  */
 import type {
   Catalog,
+  Condition,
   CalcElement,
   CalcGlazing,
   CalcContour,
@@ -91,6 +92,23 @@ export function applySpecItem(
   }
 }
 
+/**
+ * Проверка условий строки: [Параметр = Значение] / [Параметр <> Значение].
+ * Пустой список условий — строка считается всегда.
+ * Незаданное значение параметра берётся из значения по умолчанию справочника.
+ */
+export function matchConditions(
+  conditions: Condition[] | undefined,
+  params: Record<string, string>,
+  catalog: Catalog,
+): boolean {
+  if (!conditions?.length) return true
+  return conditions.every((c) => {
+    const actual = params[c.paramId] ?? catalog.params.find((p) => p.id === c.paramId)?.defaultValue ?? ''
+    return c.op === '=' ? actual === c.value : actual !== c.value
+  })
+}
+
 export interface SpecInput {
   input: ProductInput
   elements: CalcElement[]
@@ -105,6 +123,17 @@ export function computeSpec(data: SpecInput, catalog: Catalog): { lines: SpecLin
   const issues: string[] = []
   if (!system) return { lines: [], issues: [`Профильная система не найдена: ${input.systemId}`] }
 
+  // Контекст условий: параметры изделия, перекрытые параметрами конкретной створки.
+  const sashParams = new Map<string, Record<string, string>>()
+  for (const c of contours) {
+    if (c.kind === 'sash') sashParams.set(c.id, { ...input.params, ...(c.params ?? {}) })
+  }
+  const ctxOfContour = (contourId: string) => sashParams.get(contourId) ?? input.params
+  const ctxOfField = (fieldId: string) => {
+    const sash = contours.find((c) => c.kind === 'sash' && c.fieldId === fieldId)
+    return sash ? ctxOfContour(sash.id) : input.params
+  }
+
   // 1. Спецификация профилей: сам артикул, армирование, уплотнение, работы.
   for (const el of elements) {
     const profile = system.profiles.find((p) => p.id === el.systemProfileId)
@@ -113,7 +142,8 @@ export function computeSpec(data: SpecInput, catalog: Catalog): { lines: SpecLin
       continue
     }
     const base: RuleBase = { width: el.length, height: 0, length: el.length }
-    for (const item of profile.spec.filter((i) => i.enabled)) {
+    const ctx = ctxOfContour(el.contourId)
+    for (const item of profile.spec.filter((i) => i.enabled && matchConditions(i.conditions, ctx, catalog))) {
       lines.push(applySpecItem(item, base, catalog, `${profile.name} (${el.contourId}/${el.side})`))
     }
   }
@@ -156,7 +186,8 @@ export function computeSpec(data: SpecInput, catalog: Catalog): { lines: SpecLin
     const filling = system.fillings.find((f) => f.id === g.fillingId)
     if (filling) {
       const base: RuleBase = { width: g.size.w, height: g.size.h, length: 2 * (g.size.w + g.size.h) }
-      for (const item of filling.spec.filter((i) => i.enabled)) {
+      const ctx = ctxOfField(g.fieldId)
+      for (const item of filling.spec.filter((i) => i.enabled && matchConditions(i.conditions, ctx, catalog))) {
         lines.push(applySpecItem(item, base, catalog, `${filling.name} (${g.label})`))
       }
     }
@@ -175,6 +206,11 @@ export function computeSpec(data: SpecInput, catalog: Catalog): { lines: SpecLin
         `${c.label ?? 'Створка'}: фальц ${falz.w}×${falz.h} мм превышает предел варианта «${variant.name}» (${variant.maxFw}×${variant.maxFh} мм)`,
       )
     }
+    if (c.massKg && c.massKg > variant.maxSashMass) {
+      issues.push(
+        `${c.label ?? 'Створка'}: масса ${c.massKg} кг превышает предел варианта «${variant.name}» (${variant.maxSashMass} кг)`,
+      )
+    }
     const range = variant.ranges.find(
       (r) => falz.w >= r.fw[0] && falz.w <= r.fw[1] && falz.h >= r.fh[0] && falz.h <= r.fh[1],
     )
@@ -184,7 +220,8 @@ export function computeSpec(data: SpecInput, catalog: Catalog): { lines: SpecLin
       )
       continue
     }
-    for (const it of range.items) {
+    const ctx = ctxOfContour(c.id)
+    for (const it of range.items.filter((i) => matchConditions(i.conditions, ctx, catalog))) {
       const material = materialById(catalog, it.materialId)
       lines.push({
         materialId: material.id,
@@ -205,7 +242,7 @@ export function computeSpec(data: SpecInput, catalog: Catalog): { lines: SpecLin
     height: input.height,
     length: 2 * (input.width + input.height),
   }
-  for (const item of system.spec.filter((i) => i.enabled)) {
+  for (const item of system.spec.filter((i) => i.enabled && matchConditions(i.conditions, input.params, catalog))) {
     lines.push(applySpecItem(item, productBase, catalog, `Изделие · ${system.name}`))
   }
 

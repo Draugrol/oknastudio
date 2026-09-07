@@ -68,17 +68,57 @@ export interface Glazing {
 
 export type OpeningType = 'fix' | 'turn' | 'turnTilt' | 'tilt'
 
+/* ─────────────────────── Параметры и условия ─────────────────────── */
+
+export interface ParamValue {
+  id: string
+  value: string
+  order: number
+}
+
+/**
+ * Параметр справочника: пользователь заводит его сам, а строки спецификации
+ * и фурнитуры ссылаются на него условиями вида [Цвет ручки = Белый].
+ */
+export interface Param {
+  id: string
+  name: string
+  /** Скрытый параметр не показывается в конструкторе. */
+  hidden: boolean
+  defaultValue: string
+  values: ParamValue[]
+  /** Где задаётся значение: у изделия или у створки. */
+  level: 'product' | 'sash'
+}
+
+/** Условие применимости строки: [Параметр = Значение] либо [Параметр <> Значение]. */
+export interface Condition {
+  paramId: string
+  op: '=' | '<>'
+  value: string
+}
+
+export interface HardwareItem {
+  id: string
+  materialId: string
+  qty: number
+  /** Условия по параметрам створки/изделия. */
+  conditions: Condition[]
+}
+
 export interface HardwareRange {
   id: string
   /** Фальцевая ширина, мм. */
   fw: [number, number]
   /** Фальцевая высота, мм. */
   fh: [number, number]
-  items: { id: string; materialId: string; qty: number }[]
+  items: HardwareItem[]
 }
 
 export interface HardwareVariant {
   id: string
+  /** Производитель/линейка — колонка «Фурнитура» в подборе. */
+  brand: string
   name: string
   opening: OpeningType
   maxSashMass: number
@@ -109,8 +149,8 @@ export interface SpecItem {
   /** Шаг округления, мм (0 — без округления). */
   step: number
   dim: CalcDim
-  /** Параметры/условие применимости — пока справочно. */
-  note?: string
+  /** Параметры: условия применимости строки. Пусто — строка считается всегда. */
+  conditions: Condition[]
   tag?: string
 }
 
@@ -186,13 +226,6 @@ export interface SystemFilling {
   spec: SpecItem[]
 }
 
-export interface SystemParam {
-  id: string
-  name: string
-  values: string[]
-  level: 'product' | 'contour' | 'sash'
-}
-
 export interface ProfileSystem {
   id: string
   name: string
@@ -200,7 +233,8 @@ export interface ProfileSystem {
   group: string
   enabled: boolean
   buildFrom: 'inside' | 'outside'
-  params: SystemParam[]
+  /** Параметры справочника, применимые к системе. */
+  paramIds: string[]
   contours: ContourType[]
   profiles: SystemProfile[]
   adjacencies: Adjacency[]
@@ -215,6 +249,7 @@ export interface ProfileSystem {
 export interface Catalog {
   materials: Material[]
   colors: ColorScheme[]
+  params: Param[]
   glazings: Glazing[]
   hardware: HardwareVariant[]
   systems: ProfileSystem[]
@@ -223,6 +258,7 @@ export interface Catalog {
 
 /* ───────────────────── Входная модель изделия (§5.4) ───────────────────── */
 
+/** `glazingId: ''` — поле без заполнения (пустой проём). */
 export type FieldFill =
   | { type: 'glass'; glazingId: string }
   | {
@@ -231,6 +267,8 @@ export type FieldFill =
       handle: 'left' | 'right'
       glazingId: string
       hardwareVariantId: string
+      /** Значения параметров уровня створки: ключ — Param.id. */
+      params: Record<string, string>
     }
 
 export interface FieldNode {
@@ -256,6 +294,7 @@ export interface ProductInput {
   width: number
   height: number
   qty: number
+  /** Значения параметров уровня изделия: ключ — Param.id. */
   params: Record<string, string>
   root: SceneNode
 }
@@ -296,8 +335,12 @@ export interface CalcContour {
   opening?: OpeningType
   handle?: 'left' | 'right'
   hardwareVariantId?: string
+  /** Значения параметров створки — контекст для условий. */
+  params?: Record<string, string>
   /** Размеры по фальцу (ФШ×ФВ) — база расчёта фурнитуры. */
   falz?: { w: number; h: number }
+  /** Масса створки с заполнением, кг — ограничение варианта фурнитуры. */
+  massKg?: number
 }
 
 export interface CalcGlazing {

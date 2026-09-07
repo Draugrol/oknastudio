@@ -248,3 +248,53 @@ th.w-tag { width: 76px; }
 .sys-editor section { min-width: 0; }
 .sys-editor .card { margin-top: 12px; }
 .sys-editor .hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+
+/* ─── Условия (колонка «Параметры») ─── */
+th.w-params { width: 190px; }
+th.w-op { width: 88px; }
+td.cond-text { padding: 5px 7px; font-size: 11.5px; }
+.conditions { margin-top: 2px; }
+.conditions .row-toolbar { background: #eef3f8; }
+
+/* ─── Модальные окна ─── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(21, 30, 40, .45);
+  display: flex; align-items: center; justify-content: center; z-index: 50; padding: 24px;
+}
+.modal {
+  background: var(--panel); border-radius: 10px; box-shadow: 0 18px 48px rgba(16, 24, 32, .3);
+  display: flex; flex-direction: column; max-height: 100%; overflow: hidden;
+}
+.modal > header {
+  display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+  border-bottom: 1px solid var(--line); background: #f4f7fa;
+}
+.modal > header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.modal > header .link { margin-left: auto; font-size: 15px; color: var(--muted); }
+.modal > footer {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  border-top: 1px solid var(--line); background: #f7f9fb;
+}
+.modal > footer .muted { margin-right: auto; font-size: 12px; }
+
+.modal.hardware { width: min(1080px, 100%); }
+.hw-head {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 9px 14px; padding: 13px 16px; border-bottom: 1px solid var(--line);
+}
+.hw-head input[readonly] { background: #f2f5f8; color: #46586b; }
+.hw-body { display: grid; grid-template-columns: minmax(0, 1fr) 330px; min-height: 0; overflow: auto; }
+.hw-params th.w-base { width: 165px; }
+.hw-list { overflow: auto; border-right: 1px solid var(--line); }
+.hw-list table.grid, .hw-params table.grid { border: none; border-radius: 0; margin: 0; }
+.hw-list tbody tr { cursor: pointer; }
+.hw-list tbody tr.selected { background: #e6efff; }
+.hw-list tbody tr.unfit td { color: #a2adb8; }
+.hw-list tbody tr.unfit td:nth-child(3)::after { content: ' — не подходит'; color: var(--danger); font-size: 11px; }
+.hw-params { overflow: auto; }
+.hw-issues {
+  padding: 8px 16px; background: #fff6e8; border-top: 1px solid #f0d9a8;
+  color: #8a5d00; font-size: 12px;
+}
+th.w-pic { width: 56px; }
+.op-icon { display: block; margin: 3px auto; }

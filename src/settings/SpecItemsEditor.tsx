@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import type { CalcBase, CalcDim, Catalog, SpecItem } from '../core/types'
 import { CheckCell, NumCell, RowToolbar, SelectCell, TextCell } from './grid'
+import { ConditionsEditor, conditionsText } from './ConditionsEditor'
 import { newId } from '../store/catalog'
 
 export const BASE_OPTIONS: { value: CalcBase; label: string }[] = [
@@ -40,6 +41,7 @@ export function newSpecItem(materialId: string): SpecItem {
     coef: 1,
     step: 0,
     dim: '1D',
+    conditions: [],
   }
 }
 
@@ -56,6 +58,7 @@ export function SpecItemsEditor({
 }) {
   const [selected, setSelected] = useState<string | null>(null)
   const materialOptions = catalog.materials.map((m) => ({ value: m.id, label: `${m.code} · ${m.name}` }))
+  const selectedItem = items.find((i) => i.id === selected) ?? null
 
   const patch = (id: string, p: Partial<SpecItem>) =>
     onChange((list) => {
@@ -99,6 +102,7 @@ export function SpecItemsEditor({
             <th className="w-num">Коэфф.</th>
             <th className="w-num">Шаг</th>
             <th className="w-dim">Размерность</th>
+            <th className="w-params">Параметры</th>
             <th className="w-tag">Тэг</th>
           </tr>
         </thead>
@@ -107,7 +111,7 @@ export function SpecItemsEditor({
             <tr
               key={item.id}
               className={item.id === selected ? 'selected' : undefined}
-              onClick={() => setSelected(item.id)}
+              onClick={() => setSelected(item.id)} onFocusCapture={() => setSelected(item.id)}
             >
               <td><CheckCell value={item.enabled} onChange={(v) => patch(item.id, { enabled: v })} /></td>
               <td>
@@ -142,18 +146,34 @@ export function SpecItemsEditor({
                   onChange={(v) => patch(item.id, { dim: v as CalcDim })}
                 />
               </td>
+              <td className="muted cond-text">{conditionsText(item.conditions, catalog) || '—'}</td>
               <td><TextCell value={item.tag ?? ''} onChange={(v) => patch(item.id, { tag: v })} /></td>
             </tr>
           ))}
           {!items.length && (
             <tr>
-              <td colSpan={10} className="muted center">
+              <td colSpan={11} className="muted center">
                 Строк нет
               </td>
             </tr>
           )}
         </tbody>
       </table>
+      {selectedItem && (
+        <ConditionsEditor
+          title={`Параметры строки «${catalog.materials.find((m) => m.id === selectedItem.materialId)?.name ?? ''}»`}
+          conditions={selectedItem.conditions ?? []}
+          catalog={catalog}
+          onChange={(fn) =>
+            onChange((list) => {
+              const target = list.find((i) => i.id === selectedItem.id)
+              if (!target) return
+              target.conditions = target.conditions ?? []
+              fn(target.conditions)
+            })
+          }
+        />
+      )}
     </div>
   )
 }

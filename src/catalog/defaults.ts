@@ -8,7 +8,7 @@
  * подобраны под контрольный кейс плана §11.5:
  *   рама 920×1620 -> створка 844×1544 -> СП 666×1366.
  */
-import type { Catalog, CalcBase, CalcDim, SpecItem } from '../core/types'
+import type { Catalog, CalcBase, CalcDim, Condition, SpecItem } from '../core/types'
 
 let seq = 0
 const sid = (p: string) => `${p}${++seq}`
@@ -29,12 +29,71 @@ function spec(
     coef: 1,
     step: 0,
     dim: '1D',
+    conditions: [],
     ...o,
   }
 }
 
+/** Условие [Параметр = Значение]. */
+const cond = (paramId: string, value: string, op: Condition['op'] = '='): Condition => ({ paramId, op, value })
+
+/** Позиция комплекта фурнитуры. */
+const hwi = (materialId: string, qty = 1, conditions: Condition[] = []) => ({
+  id: sid('HI'),
+  materialId,
+  qty,
+  conditions,
+})
+
+/**
+ * Общий хвост любого комплекта: ручка выбирается условием по параметру
+ * «Цвет ручки», детский замок ставится только при [Детский замок = да].
+ */
+const handleSet = () => [
+  hwi('M-HW-HANDLE-W', 1, [cond('PAR-HANDLE-COLOR', 'Белый')]),
+  hwi('M-HW-HANDLE-BR', 1, [cond('PAR-HANDLE-COLOR', 'Коричневый')]),
+  hwi('M-HW-HANDLE-S', 1, [cond('PAR-HANDLE-COLOR', 'Серебристый')]),
+  hwi('M-HW-LOCK-CHILD', 1, [cond('PAR-CHILD-LOCK', 'да')]),
+  hwi('W-HW-MOUNT'),
+]
+
+const hwr = (
+  fw: [number, number],
+  fh: [number, number],
+  items: ReturnType<typeof hwi>[],
+) => ({ id: sid('HR'), fw, fh, items: [...items, ...handleSet()] })
+
 export const defaultCatalog: Catalog = {
   currency: { code: 'RUB', symbol: '₽' },
+
+  /**
+   * Параметры заводятся пользователем и используются в условиях строк
+   * спецификации и фурнитуры: [Цвет ручки = Белый] -> ставим белую ручку.
+   */
+  params: [
+    {
+      id: 'PAR-HANDLE-COLOR', name: 'Цвет ручки', hidden: false, level: 'sash', defaultValue: 'Белый',
+      values: [
+        { id: 'PV1', value: 'Белый', order: 1 },
+        { id: 'PV2', value: 'Коричневый', order: 2 },
+        { id: 'PV3', value: 'Серебристый', order: 3 },
+      ],
+    },
+    {
+      id: 'PAR-CHILD-LOCK', name: 'Детский замок', hidden: false, level: 'sash', defaultValue: 'нет',
+      values: [
+        { id: 'PV4', value: 'нет', order: 1 },
+        { id: 'PV5', value: 'да', order: 2 },
+      ],
+    },
+    {
+      id: 'PAR-SEAL-COLOR', name: 'Цвет уплотнения', hidden: false, level: 'product', defaultValue: 'Чёрный',
+      values: [
+        { id: 'PV6', value: 'Чёрный', order: 1 },
+        { id: 'PV7', value: 'Серый', order: 2 },
+      ],
+    },
+  ],
 
   colors: [
     { id: 'COL-WHITE', name: 'Белый', markup: 1, render: { outer: '#f4f6f8', inner: '#e9edf1', edge: '#b9c2cc' } },
@@ -61,7 +120,8 @@ export const defaultCatalog: Catalog = {
     { id: 'M-REINF-IMPOST', code: 'AR-2.0I', name: 'Армирование импоста 2.0 мм', kind: 'profile', unit: 'м', price: 320, group: 'Армирование', geometry: { faceWidth: 34, depth: 34, massPerMeter: 1.9 } },
 
     /* ── Уплотнение ── */
-    { id: 'M-SEAL-FRAME', code: 'EPDM-F', name: 'Уплотнитель рамный EPDM', kind: 'profile', unit: 'м', price: 42, group: 'Уплотнение' },
+    { id: 'M-SEAL-FRAME', code: 'EPDM-F', name: 'Уплотнитель рамный EPDM чёрный', kind: 'profile', unit: 'м', price: 42, group: 'Уплотнение' },
+    { id: 'M-SEAL-FRAME-GR', code: 'EPDM-FS', name: 'Уплотнитель рамный EPDM серый', kind: 'profile', unit: 'м', price: 48, group: 'Уплотнение' },
     { id: 'M-SEAL-SASH', code: 'EPDM-S', name: 'Уплотнитель створочный EPDM', kind: 'profile', unit: 'м', price: 46, group: 'Уплотнение' },
     { id: 'M-SEAL-GLASS', code: 'EPDM-G', name: 'Уплотнитель стекольный EPDM', kind: 'profile', unit: 'м', price: 38, group: 'Уплотнение' },
 
@@ -72,7 +132,10 @@ export const defaultCatalog: Catalog = {
     { id: 'M-SPACER-10', code: 'DR-10', name: 'Дистанционная рамка 10 мм', kind: 'profile', unit: 'м', price: 88, group: 'Стеклопакет' },
 
     /* ── Фурнитура ── */
-    { id: 'M-HW-HANDLE', code: 'HW-100', name: 'Ручка оконная', kind: 'piece', unit: 'шт', price: 480, group: 'Фурнитура', colored: true },
+    { id: 'M-HW-HANDLE-W', code: 'HW-100B', name: 'Ручка оконная белая', kind: 'piece', unit: 'шт', price: 480, group: 'Фурнитура' },
+    { id: 'M-HW-HANDLE-BR', code: 'HW-100K', name: 'Ручка оконная коричневая', kind: 'piece', unit: 'шт', price: 540, group: 'Фурнитура' },
+    { id: 'M-HW-HANDLE-S', code: 'HW-100S', name: 'Ручка оконная серебристая', kind: 'piece', unit: 'шт', price: 610, group: 'Фурнитура' },
+    { id: 'M-HW-LOCK-CHILD', code: 'HW-DZ', name: 'Детский замок', kind: 'piece', unit: 'шт', price: 890, group: 'Фурнитура' },
     { id: 'M-HW-TT-SET-S', code: 'HW-TT-S', name: 'Комплект поворотно-откидной, малый', kind: 'piece', unit: 'шт', price: 2450, group: 'Фурнитура' },
     { id: 'M-HW-TT-SET-M', code: 'HW-TT-M', name: 'Комплект поворотно-откидной, средний', kind: 'piece', unit: 'шт', price: 2980, group: 'Фурнитура' },
     { id: 'M-HW-TT-SET-L', code: 'HW-TT-L', name: 'Комплект поворотно-откидной, большой', kind: 'piece', unit: 'шт', price: 3640, group: 'Фурнитура' },
@@ -116,42 +179,43 @@ export const defaultCatalog: Catalog = {
   hardware: [
     {
       id: 'HW-TT-STD',
+      brand: 'MACO',
       name: 'Поворотно-откидная, стандарт',
       opening: 'turnTilt',
       maxSashMass: 100,
       maxFw: 1000,
       maxFh: 2000,
       ranges: [
-        { id: 'HR1', fw: [300, 700], fh: [400, 1000], items: [{ id: 'HI1', materialId: 'M-HW-TT-SET-S', qty: 1 }, { id: 'HI2', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI3', materialId: 'M-HW-HINGE', qty: 2 }, { id: 'HI4', materialId: 'W-HW-MOUNT', qty: 1 }] },
-        { id: 'HR2', fw: [300, 700], fh: [1000, 1600], items: [{ id: 'HI5', materialId: 'M-HW-TT-SET-M', qty: 1 }, { id: 'HI6', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI7', materialId: 'M-HW-HINGE', qty: 2 }, { id: 'HI8', materialId: 'M-HW-MICRO', qty: 1 }, { id: 'HI9', materialId: 'W-HW-MOUNT', qty: 1 }] },
-        { id: 'HR3', fw: [300, 700], fh: [1600, 2000], items: [{ id: 'HI10', materialId: 'M-HW-TT-SET-L', qty: 1 }, { id: 'HI11', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI12', materialId: 'M-HW-HINGE', qty: 3 }, { id: 'HI13', materialId: 'M-HW-MICRO', qty: 1 }, { id: 'HI14', materialId: 'W-HW-MOUNT', qty: 1 }] },
-        { id: 'HR4', fw: [700, 1000], fh: [400, 1000], items: [{ id: 'HI15', materialId: 'M-HW-TT-SET-M', qty: 1 }, { id: 'HI16', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI17', materialId: 'M-HW-HINGE', qty: 2 }, { id: 'HI18', materialId: 'W-HW-MOUNT', qty: 1 }] },
-        { id: 'HR5', fw: [700, 1000], fh: [1000, 1600], items: [{ id: 'HI19', materialId: 'M-HW-TT-SET-L', qty: 1 }, { id: 'HI20', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI21', materialId: 'M-HW-HINGE', qty: 3 }, { id: 'HI22', materialId: 'M-HW-MICRO', qty: 1 }, { id: 'HI23', materialId: 'W-HW-MOUNT', qty: 1 }] },
-        { id: 'HR6', fw: [700, 1000], fh: [1600, 2000], items: [{ id: 'HI24', materialId: 'M-HW-TT-SET-L', qty: 1 }, { id: 'HI25', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI26', materialId: 'M-HW-HINGE', qty: 3 }, { id: 'HI27', materialId: 'M-HW-MICRO', qty: 1 }, { id: 'HI28', materialId: 'W-HW-MOUNT', qty: 1 }] },
+        hwr([300, 700], [400, 1000], [hwi('M-HW-TT-SET-S'), hwi('M-HW-HINGE', 2)]),
+        hwr([300, 700], [1000, 1600], [hwi('M-HW-TT-SET-M'), hwi('M-HW-HINGE', 2), hwi('M-HW-MICRO')]),
+        hwr([300, 700], [1600, 2000], [hwi('M-HW-TT-SET-L'), hwi('M-HW-HINGE', 3), hwi('M-HW-MICRO')]),
+        hwr([700, 1000], [400, 1000], [hwi('M-HW-TT-SET-M'), hwi('M-HW-HINGE', 2)]),
+        hwr([700, 1000], [1000, 1600], [hwi('M-HW-TT-SET-L'), hwi('M-HW-HINGE', 3), hwi('M-HW-MICRO')]),
+        hwr([700, 1000], [1600, 2000], [hwi('M-HW-TT-SET-L'), hwi('M-HW-HINGE', 3), hwi('M-HW-MICRO')]),
       ],
     },
     {
       id: 'HW-TURN-STD',
+      brand: 'MACO',
       name: 'Поворотная, стандарт',
       opening: 'turn',
       maxSashMass: 80,
       maxFw: 900,
       maxFh: 1800,
       ranges: [
-        { id: 'HR7', fw: [300, 900], fh: [400, 1200], items: [{ id: 'HI29', materialId: 'M-HW-TURN-SET', qty: 1 }, { id: 'HI30', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI31', materialId: 'M-HW-HINGE', qty: 2 }, { id: 'HI32', materialId: 'W-HW-MOUNT', qty: 1 }] },
-        { id: 'HR8', fw: [300, 900], fh: [1200, 1800], items: [{ id: 'HI33', materialId: 'M-HW-TURN-SET', qty: 1 }, { id: 'HI34', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI35', materialId: 'M-HW-HINGE', qty: 3 }, { id: 'HI36', materialId: 'W-HW-MOUNT', qty: 1 }] },
+        hwr([300, 900], [400, 1200], [hwi('M-HW-TURN-SET'), hwi('M-HW-HINGE', 2)]),
+        hwr([300, 900], [1200, 1800], [hwi('M-HW-TURN-SET'), hwi('M-HW-HINGE', 3)]),
       ],
     },
     {
       id: 'HW-TILT-STD',
+      brand: 'Vorne',
       name: 'Откидная (фрамужная)',
       opening: 'tilt',
       maxSashMass: 60,
       maxFw: 1600,
       maxFh: 900,
-      ranges: [
-        { id: 'HR9', fw: [300, 1600], fh: [300, 900], items: [{ id: 'HI37', materialId: 'M-HW-TURN-SET', qty: 1 }, { id: 'HI38', materialId: 'M-HW-HANDLE', qty: 1 }, { id: 'HI39', materialId: 'M-HW-HINGE', qty: 2 }, { id: 'HI40', materialId: 'W-HW-MOUNT', qty: 1 }] },
-      ],
+      ranges: [hwr([300, 1600], [300, 900], [hwi('M-HW-TURN-SET'), hwi('M-HW-HINGE', 2)])],
     },
   ],
 
@@ -164,17 +228,15 @@ export const defaultCatalog: Catalog = {
       buildFrom: 'inside',
       glazingIds: ['GL-24-STD', 'GL-32-ENERGY'],
       hardwareVariantIds: ['HW-TT-STD', 'HW-TURN-STD', 'HW-TILT-STD'],
-      params: [
-        { id: 'PP1', name: 'Цвет уплотнения', values: ['Чёрный', 'Серый'], level: 'product' },
-        { id: 'PP2', name: 'Направление открывания', values: ['Левое', 'Правое'], level: 'sash' },
-      ],
+      paramIds: ['PAR-HANDLE-COLOR', 'PAR-CHILD-LOCK', 'PAR-SEAL-COLOR'],
       profiles: [
         {
           id: 'SP-SL70-FRAME', name: 'Рама 70 Softline', enabled: true, role: 'frame', materialId: 'M-SL70-FRAME',
           spec: [
             spec('M-SL70-FRAME', { base: 'length', dim: '1D', step: 1 }),
             spec('M-REINF-FRAME', { base: 'length', dim: '1D', size: -60, step: 5, colorRule: 'none' }),
-            spec('M-SEAL-FRAME', { base: 'length', dim: '1D', step: 1, colorRule: 'none' }),
+            spec('M-SEAL-FRAME', { base: 'length', dim: '1D', step: 1, colorRule: 'none', conditions: [cond('PAR-SEAL-COLOR', 'Чёрный')] }),
+            spec('M-SEAL-FRAME-GR', { base: 'length', dim: '1D', step: 1, colorRule: 'none', conditions: [cond('PAR-SEAL-COLOR', 'Серый')] }),
             spec('W-REINF-CUT', { base: 'total', dim: '0D', count: 1, colorRule: 'none' }),
           ],
         },
@@ -239,7 +301,7 @@ export const defaultCatalog: Catalog = {
       buildFrom: 'inside',
       glazingIds: ['GL-24-STD'],
       hardwareVariantIds: ['HW-TT-STD', 'HW-TURN-STD'],
-      params: [{ id: 'PP3', name: 'Цвет уплотнения', values: ['Чёрный'], level: 'product' }],
+      paramIds: ['PAR-HANDLE-COLOR', 'PAR-CHILD-LOCK'],
       profiles: [
         {
           id: 'SP-BL60-FRAME', name: 'Рама 58 Blitz', enabled: true, role: 'frame', materialId: 'M-BL60-FRAME',
