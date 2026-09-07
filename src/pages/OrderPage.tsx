@@ -3,19 +3,20 @@ import { useMemo } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useOrders, ORDER_STATUSES, type OrderStatus } from '../store/orders'
 import { calcOrder } from '../core/order'
-import { catalog } from '../catalog'
+import { useCatalog } from '../store/catalog'
 import { Drawing } from '../editor/Drawing'
 import { newProduct } from '../core/scene'
 
 export function OrderPage() {
   const { orderId = '' } = useParams()
   const { orders, updateOrder, addItem, removeItem, duplicateItem } = useOrders()
+  const { catalog } = useCatalog()
   const navigate = useNavigate()
   const order = orders.find((o) => o.id === orderId)
 
   const totals = useMemo(
     () => (order ? calcOrder(order.items, catalog, order.discount) : null),
-    [order],
+    [order, catalog],
   )
 
   if (!order || !totals) {
@@ -38,7 +39,7 @@ export function OrderPage() {
           <button
             className="primary"
             onClick={() => {
-              const item = addItem(order.id, newProduct())
+              const item = addItem(order.id, newProduct(catalog))
               navigate(`/orders/${order.id}/items/${item.id}`)
             }}
           >

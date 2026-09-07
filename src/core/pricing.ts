@@ -10,7 +10,8 @@ export function priceSpec(lines: SpecLine[], catalog: Catalog, colorId: string):
   const markup = color?.markup ?? 1
   return lines.map((line) => {
     const material = materialById(catalog, line.materialId)
-    const price = round2(material.price * (material.colored ? markup : 1))
+    const colored = material.colored && line.colorRule !== 'none'
+    const price = round2(material.price * (colored ? markup : 1))
     return { ...line, price, sum: round2(price * line.amount) }
   })
 }

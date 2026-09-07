@@ -1,11 +1,15 @@
 /**
  * Геометрическое ядро (план §6.1).
  *
- * Чистые функции: на вход входная модель изделия + срез справочников,
- * на выход — контуры, элементы, заполнения. Ни UI, ни БД.
+ * Чистые функции: вход — модель изделия и срез справочников, выход — контуры,
+ * профильные детали и заполнения. Ни UI, ни хранилища.
+ *
+ * Всё выводится из настроек системы: «Контура» задают профиль каждой стороны,
+ * «Прилегания» (dW/dH) — посадку створки на родительский профиль, «Соединения»
+ * (Размер) — добавку к длине детали, «Заполнения» (dW/dH) — габарит стеклопакета.
  *
  * Конвенция координат: начало — левый нижний угол наружного габарита рамы,
- * X вправо, Y вверх, все размеры в миллиметрах.
+ * X вправо, Y вверх, размеры в миллиметрах.
  *
  * Контрольный кейс (план §11.5): рама 920×1620 -> створка 844×1544 -> СП 666×1366.
  */
@@ -14,58 +18,53 @@ import type {
   CalcContour,
   CalcElement,
   CalcGlazing,
+  ContourType,
+  Material,
   ProductInput,
-  ProfileGeometry,
   ProfileRole,
+  ProfileSystem,
   Rect,
   SceneNode,
+  SystemProfile,
 } from './types'
 
 export interface GeometryResult {
   contours: CalcContour[]
   elements: CalcElement[]
   glazings: CalcGlazing[]
-  /** Световые проёмы полей (для отрисовки и подписи размеров). */
   fields: { id: string; rect: Rect; neighbors: Neighbors }[]
-  /** Узлы деления: проём родителя и тело импоста — нужны редактору для перетаскивания. */
   splits: { id: string; dir: 'v' | 'h'; region: Rect; rect: Rect }[]
   imposts: CalcElement[]
   issues: string[]
 }
 
-export type Neighbors = Record<'left' | 'right' | 'top' | 'bottom', ProfileRole>
+export type Side = 'left' | 'right' | 'top' | 'bottom'
+export type Neighbors = Record<Side, ProfileRole>
 
 const round = (v: number) => Math.round(v * 10) / 10
 
-export function findSystem(catalog: Catalog, id: string) {
+export function findSystem(catalog: Catalog, id: string): ProfileSystem {
   const s = catalog.systems.find((x) => x.id === id)
   if (!s) throw new Error(`Профильная система не найдена: ${id}`)
   return s
 }
 
-export function materialById(catalog: Catalog, id: string) {
+export function materialById(catalog: Catalog, id: string): Material {
   const m = catalog.materials.find((x) => x.id === id)
   if (!m) throw new Error(`Материал не найден: ${id}`)
   return m
 }
 
-/** Геометрия профиля системы по роли. Хардкода ролей вне справочника нет. */
-export function profileGeometry(
-  catalog: Catalog,
-  systemId: string,
-  role: ProfileRole,
-): { materialId: string; geom: ProfileGeometry } {
-  const system = findSystem(catalog, systemId)
-  const materialId = system.profiles[role]
-  if (!materialId) throw new Error(`В системе «${system.name}» не задан профиль роли «${role}»`)
-  const material = materialById(catalog, materialId)
-  if (!material.geometry) throw new Error(`У материала «${material.name}» не заполнена геометрия`)
-  return { materialId, geom: material.geometry }
+/** Тип контура рамы и створки в системе. */
+export function frameContourOf(system: ProfileSystem): ContourType | undefined {
+  return system.contours.find((c) => c.enabled && c.isFrame && !c.isSash) ?? system.contours.find((c) => c.enabled)
+}
+export function sashContourOf(system: ProfileSystem): ContourType | undefined {
+  return system.contours.find((c) => c.enabled && c.isSash)
 }
 
 export function computeGeometry(input: ProductInput, catalog: Catalog): GeometryResult {
   const system = findSystem(catalog, input.systemId)
-  const frame = profileGeometry(catalog, input.systemId, 'frame')
 
   const contours: CalcContour[] = []
   const elements: CalcElement[] = []
@@ -75,26 +74,47 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
   const splits: GeometryResult['splits'] = []
   const issues: string[] = []
 
-  const outer: Rect = { x: 0, y: 0, w: input.width, h: input.height }
-  const frameLight = inset(outer, frame.geom.faceWidth)
+  const frameContour = frameContourOf(system)
+  const sashContour = sashContourOf(system)
+  if (!frameContour) {
+    issues.push(`В системе «${system.name}» не задан контур рамы (вкладка «Контура»)`)
+    return { contours, elements, glazings, fields, splits, imposts, issues }
+  }
 
-  contours.push({ id: 'C1', kind: 'frame', parentId: null, rect: outer, light: frameLight })
-  elements.push(...rectangleContour('C1', 'frame', frame.materialId, outer))
+  const outer: Rect = { x: 0, y: 0, w: input.width, h: input.height }
+  const frameLight = insetByContour(frameContour, outer)
+
+  contours.push({
+    id: 'C1',
+    kind: 'frame',
+    parentId: null,
+    contourTypeId: frameContour.id,
+    rect: outer,
+    light: frameLight,
+  })
+  elements.push(...contourElements('C1', frameContour, outer))
 
   const neighbors: Neighbors = { left: 'frame', right: 'frame', top: 'frame', bottom: 'frame' }
   walk(input.root, frameLight, neighbors)
 
   return { contours, elements, glazings, fields, splits, imposts, issues }
 
+  /* ───────────────────────── обход дерева деления ───────────────────────── */
+
   function walk(node: SceneNode, region: Rect, nb: Neighbors) {
     if (node.kind === 'split') {
-      const impost = profileGeometry(catalog, input.systemId, 'impost')
-      const iw = impost.geom.faceWidth
       const vertical = node.dir === 'v'
-      const span = vertical ? region.w : region.h
-      if (span < iw + 2 * 50) {
-        issues.push(`Поле слишком мало для импоста (${Math.round(span)} мм)`)
+      const dividerId = vertical ? frameContour!.dividerV : frameContour!.dividerH
+      const divider = profileOf(dividerId)
+      if (!divider) {
+        issues.push(`В контуре «${frameContour!.name}» не задан разделитель (импост)`)
+        walk(node.children[0], region, nb)
+        return
       }
+      const iw = faceWidth(divider)
+      const span = vertical ? region.w : region.h
+      if (span < iw + 100) issues.push(`Поле слишком мало для импоста (${Math.round(span)} мм)`)
+
       const cut = clamp(node.ratio, 0.08, 0.92) * span
       // Положение импоста округляется до целого мм: производство не режет доли миллиметра.
       const start = Math.round((vertical ? region.x : region.y) + cut - iw / 2)
@@ -103,19 +123,21 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
         ? { x: start, y: region.y, w: iw, h: region.h }
         : { x: region.x, y: start, w: region.w, h: iw }
 
-      // Примыкание 90° к телу: деталь заходит в фальц соседнего профиля с двух сторон.
-      const length = (vertical ? region.h : region.w) + 2 * system.joints.impost
-      imposts.push({
+      // Примыкание к телу: деталь заходит в соседний профиль с двух сторон.
+      const length = (vertical ? region.h : region.w) + 2 * jointSize('impostT', divider.role)
+      const element: CalcElement = {
         id: `E-${node.id}`,
         contourId: 'C1',
-        role: 'impost',
-        materialId: impost.materialId,
+        role: divider.role,
+        systemProfileId: divider.id,
+        materialId: divider.materialId,
         length: round(length),
         side: 'mid',
         cut: [90, 90],
         rect,
-      })
-      elements.push(imposts[imposts.length - 1])
+      }
+      imposts.push(element)
+      elements.push(element)
       splits.push({ id: node.id, dir: node.dir, region, rect })
 
       const first: Rect = vertical
@@ -125,46 +147,138 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
         ? { x: rect.x + rect.w, y: region.y, w: region.x + region.w - (rect.x + rect.w), h: region.h }
         : { x: region.x, y: region.y, w: region.w, h: rect.y - region.y }
 
-      // Первый потомок — слева (для 'v') либо сверху (для 'h').
-      walk(node.children[0], first, vertical ? { ...nb, right: 'impost' } : { ...nb, bottom: 'impost' })
-      walk(node.children[1], second, vertical ? { ...nb, left: 'impost' } : { ...nb, top: 'impost' })
+      walk(node.children[0], first, vertical ? { ...nb, right: divider.role } : { ...nb, bottom: divider.role })
+      walk(node.children[1], second, vertical ? { ...nb, left: divider.role } : { ...nb, top: divider.role })
       return
     }
 
     fields.push({ id: node.id, rect: region, neighbors: { ...nb } })
 
     if (node.fill.type === 'glass') {
-      glazings.push(makeGlazing(node.id, node.fill.glazingId, expandByFalz(region, nb)))
+      const filling = fillingOf(frameContour!)
+      glazings.push(makeGlazing(node.id, node.fill.glazingId, expandByFilling(region, filling?.dW, filling?.dH), filling?.id))
       return
     }
 
-    // Створка: наружный габарит = световой проём родителя + наплав с каждой стороны.
-    const sash = profileGeometry(catalog, input.systemId, 'sash')
-    const sashRect = expandByOverlap(region, nb)
-    const sashLight = inset(sashRect, sash.geom.faceWidth)
+    if (!sashContour) {
+      issues.push(`В системе «${system.name}» не задан контур створки (вкладка «Контура»)`)
+      return
+    }
+
+    // Створка садится на родительский профиль по «Прилеганию»: dW/dH — суммарная
+    // добавка к ширине и высоте относительно светового проёма родителя.
+    const sashRect = expand(
+      region,
+      adjacency(nb.left).dW / 2,
+      adjacency(nb.right).dW / 2,
+      adjacency(nb.top).dH / 2,
+      adjacency(nb.bottom).dH / 2,
+    )
+    const sashLight = insetByContour(sashContour, sashRect)
     const contourId = `C-${node.id}`
 
     contours.push({
       id: contourId,
-      kind: 'sash',
       label: `Створка №${contours.filter((c) => c.kind === 'sash').length + 1}`,
+      kind: 'sash',
       parentId: 'C1',
+      contourTypeId: sashContour.id,
       rect: sashRect,
       light: sashLight,
       fieldId: node.id,
       opening: node.fill.opening,
       handle: node.fill.handle,
       hardwareVariantId: node.fill.hardwareVariantId,
-      // Фальцевый размер створки = размер светового проёма рамы (габарит минус 2 наплава).
+      // Фальцевый размер створки = световой проём родителя (габарит минус наплав).
       falz: { w: round(region.w), h: round(region.h) },
     })
-    elements.push(...rectangleContour(contourId, 'sash', sash.materialId, sashRect))
+    elements.push(...contourElements(contourId, sashContour, sashRect))
 
-    const sashNb: Neighbors = { left: 'sash', right: 'sash', top: 'sash', bottom: 'sash' }
-    glazings.push(makeGlazing(node.id, node.fill.glazingId, expandByFalz(sashLight, sashNb)))
+    const filling = fillingOf(sashContour)
+    glazings.push(
+      makeGlazing(node.id, node.fill.glazingId, expandByFilling(sashLight, filling?.dW, filling?.dH), filling?.id),
+    )
   }
 
-  function makeGlazing(fieldId: string, glazingId: string, rect: Rect): CalcGlazing {
+  /* ─────────────────────────── справочные выборки ─────────────────────────── */
+
+  function profileOf(id: string): SystemProfile | undefined {
+    return system.profiles.find((p) => p.id === id && p.enabled)
+  }
+
+  function faceWidth(profile: SystemProfile | undefined): number {
+    if (!profile) return 0
+    const material = catalog.materials.find((m) => m.id === profile.materialId)
+    if (!material?.geometry) {
+      issues.push(`У материала профиля «${profile.name}» не заполнена геометрия`)
+      return 0
+    }
+    return material.geometry.faceWidth
+  }
+
+  function jointSize(kind: 'corner' | 'impostT', role: ProfileRole): number {
+    return system.joints.find((j) => j.enabled && j.kind === kind && j.role === role)?.size ?? 0
+  }
+
+  function adjacency(parent: ProfileRole): { dW: number; dH: number } {
+    const found = system.adjacencies.find((a) => a.enabled && a.parent === parent)
+    if (!found) {
+      issues.push(`Не задано прилегание створки к профилю роли «${roleTitle(parent)}» (вкладка «Прилегания»)`)
+      return { dW: 0, dH: 0 }
+    }
+    return found
+  }
+
+  function fillingOf(contour: ContourType) {
+    const found = system.fillings.find((f) => f.id === contour.fillingId && f.enabled)
+    if (!found) issues.push(`Для контура «${contour.name}» не задано заполнение (вкладка «Заполнения»)`)
+    return found
+  }
+
+  /** Световой проём контура: отступ каждой стороны по ширине её профиля в плане. */
+  function insetByContour(contour: ContourType, rect: Rect): Rect {
+    const l = faceWidth(profileOf(contour.left))
+    const r = faceWidth(profileOf(contour.right))
+    const t = faceWidth(profileOf(contour.top))
+    const b = faceWidth(profileOf(contour.bottom))
+    return { x: rect.x + l, y: rect.y + b, w: rect.w - l - r, h: rect.h - t - b }
+  }
+
+  /** Прямоугольный контур: длина детали = габарит + 2 × размер углового соединения. */
+  function contourElements(contourId: string, contour: ContourType, rect: Rect): CalcElement[] {
+    const sides: { side: Side; base: number; profileId: string }[] = [
+      { side: 'bottom', base: rect.w, profileId: contour.bottom },
+      { side: 'top', base: rect.w, profileId: contour.top },
+      { side: 'left', base: rect.h, profileId: contour.left },
+      { side: 'right', base: rect.h, profileId: contour.right },
+    ]
+    const result: CalcElement[] = []
+    for (const s of sides) {
+      const profile = profileOf(s.profileId)
+      if (!profile) {
+        issues.push(`В контуре «${contour.name}» не задан профиль стороны «${sideTitle(s.side)}»`)
+        continue
+      }
+      result.push({
+        id: `${contourId}-${s.side}`,
+        contourId,
+        role: profile.role,
+        systemProfileId: profile.id,
+        materialId: profile.materialId,
+        length: round(s.base + 2 * jointSize('corner', profile.role)),
+        side: s.side,
+        cut: [45, 45],
+        rect,
+      })
+    }
+    return result
+  }
+
+  function expandByFilling(rect: Rect, dW = 0, dH = 0): Rect {
+    return expand(rect, dW / 2, dW / 2, dH / 2, dH / 2)
+  }
+
+  function makeGlazing(fieldId: string, glazingId: string, rect: Rect, fillingId = ''): CalcGlazing {
     const label = `Заполнение №${glazings.length + 1}`
     const glazing = catalog.glazings.find((g) => g.id === glazingId)
     const size = { w: round(rect.w), h: round(rect.h) }
@@ -172,7 +286,7 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
     const problems: string[] = []
     let massKg = 0
     if (!glazing) {
-      problems.push(`Заполнение не найдено: ${glazingId}`)
+      problems.push(`${label}: заполнение не найдено в справочнике`)
     } else {
       const a = glazing.applicability
       if (size.w < a.minW || size.w > a.maxW)
@@ -193,6 +307,7 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
       label,
       fieldId,
       glazingId,
+      fillingId,
       rect,
       size,
       areaM2: Math.round(areaM2 * 1000) / 1000,
@@ -200,25 +315,9 @@ export function computeGeometry(input: ProductInput, catalog: Catalog): Geometry
       issues: problems,
     }
   }
-
-  /** Заполнение заходит под профиль на глубину фальца соседа с каждой стороны. */
-  function expandByFalz(rect: Rect, nb: Neighbors): Rect {
-    const f = (role: ProfileRole) => profileGeometry(catalog, input.systemId, role).geom.falz
-    return expand(rect, f(nb.left), f(nb.right), f(nb.top), f(nb.bottom))
-  }
-
-  /** Створка перекрывает соседний профиль на величину наплава. */
-  function expandByOverlap(rect: Rect, nb: Neighbors): Rect {
-    const o = (role: ProfileRole) => profileGeometry(catalog, input.systemId, role).geom.overlap
-    return expand(rect, o(nb.left), o(nb.right), o(nb.top), o(nb.bottom))
-  }
 }
 
 /* ───────────────────────────── помощники ───────────────────────────── */
-
-export function inset(r: Rect, d: number): Rect {
-  return { x: r.x + d, y: r.y + d, w: r.w - 2 * d, h: r.h - 2 * d }
-}
 
 export function expand(r: Rect, left: number, right: number, top: number, bottom: number): Rect {
   return { x: r.x - left, y: r.y - bottom, w: r.w + left + right, h: r.h + top + bottom }
@@ -228,27 +327,16 @@ function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v))
 }
 
-/** Прямоугольный контур на сварных углах 45/45: длина детали = габарит контура. */
-function rectangleContour(
-  contourId: string,
-  role: ProfileRole,
-  materialId: string,
-  rect: Rect,
-): CalcElement[] {
-  const sides: { side: CalcElement['side']; length: number }[] = [
-    { side: 'bottom', length: rect.w },
-    { side: 'top', length: rect.w },
-    { side: 'left', length: rect.h },
-    { side: 'right', length: rect.h },
-  ]
-  return sides.map((s) => ({
-    id: `${contourId}-${s.side}`,
-    contourId,
-    role,
-    materialId,
-    length: round(s.length),
-    side: s.side,
-    cut: [45, 45] as [number, number],
-    rect,
-  }))
-}
+export const roleTitle = (role: ProfileRole) =>
+  ({
+    frame: 'рама',
+    sash: 'створка',
+    impost: 'импост',
+    shtulp: 'штульп',
+    bead: 'штапик',
+    reinforcement: 'армирование',
+    none: 'без роли',
+  })[role]
+
+const sideTitle = (side: Side) =>
+  ({ left: 'левая', right: 'правая', top: 'верхняя', bottom: 'нижняя' })[side]

@@ -3,7 +3,7 @@
  * Все списки берутся из справочников системы — недопустимые варианты не показываются.
  */
 import type { CalcResult, FieldFill, OpeningType, ProductInput } from '../core/types'
-import { catalog } from '../catalog'
+import { useCatalog } from '../store/catalog'
 import { findNode, parentSplit, removeSplit, setFill, splitField } from '../core/scene'
 
 const OPENINGS: { value: OpeningType; label: string }[] = [
@@ -21,6 +21,7 @@ interface Props {
 }
 
 export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: Props) {
+  const { catalog } = useCatalog()
   const system = catalog.systems.find((s) => s.id === item.systemId)!
   const glazings = catalog.glazings.filter((g) => system.glazingIds.includes(g.id))
   const hardware = catalog.hardware.filter((h) => system.hardwareVariantIds.includes(h.id))

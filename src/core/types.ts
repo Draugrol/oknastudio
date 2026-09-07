@@ -1,28 +1,26 @@
 /**
- * Доменные типы. Соответствие плану (см. README):
- *  - справочники   -> §2, §5.1
- *  - входная модель -> §5.4 (аналог SCHEME2)
- *  - расчётные структуры -> §6
+ * Доменные типы.
  *
- * Правило из практики IT Окна: материалы профилей принадлежат системе.
- * Глобальных «профиль рамы» нет — только через настройки профильной системы.
+ * Структура справочников повторяет IT Окна: профильная система содержит
+ * «Контура», «Профили», «Прилегания», «Соединения», «Заполнения», «Фурнитуру»
+ * и «Параметры», а у профиля и заполнения есть собственная «Спецификация»
+ * (Вид расчёта / Размер / Коэфф. / Шаг). Геометрию и стоимость ядро выводит
+ * только из этих таблиц — констант конкретной системы в коде нет.
  */
 
 /* ─────────────────────────── Справочники ─────────────────────────── */
 
 export type MaterialKind = 'profile' | 'sheet' | 'piece' | 'work'
-/** Роль профиля внутри системы. */
-export type ProfileRole = 'frame' | 'sash' | 'impost' | 'shtulp' | 'sill' | 'bead' | 'reinforcement'
 
-/** Геометрия профиля в плане, мм. Все размеры — от наружного края профиля. */
+/** Роль профиля в контуре. */
+export type ProfileRole = 'frame' | 'sash' | 'impost' | 'shtulp' | 'bead' | 'reinforcement' | 'none'
+
+/** Геометрия профиля в плане, мм. Наплав и фальц сюда не входят: это свойства
+ *  прилегания и заполнения системы, а не материала (как в IT Окна). */
 export interface ProfileGeometry {
-  /** Ширина в плане: от наружного края до светового проёма. */
+  /** Ширина в плане: от наружного края профиля до светового проёма. */
   faceWidth: number
-  /** Наплав: на сколько прилегающий контур (створка) заходит на этот профиль. */
-  overlap: number
-  /** Глубина фальца: на сколько заполнение заходит под профиль. */
-  falz: number
-  /** Монтажная глубина (ось Z), мм. */
+  /** Монтажная глубина, мм. */
   depth: number
   /** Масса погонного метра, кг/м. */
   massPerMeter: number
@@ -33,35 +31,30 @@ export interface Material {
   code: string
   name: string
   kind: MaterialKind
-  /** Единица измерения для отчётов: м, м², шт, ч. */
   unit: string
-  /** Цена за единицу в валюте справочника. */
   price: number
   group: string
-  /** Только для kind === 'profile'. */
   geometry?: ProfileGeometry
-  /** Материал имеет цветовые исполнения (наценка за цвет применяется). */
+  /** Материал имеет цветовые исполнения — к цене применяется наценка за цвет. */
   colored?: boolean
 }
 
 export interface ColorScheme {
   id: string
   name: string
-  /** Наценка к цене окрашиваемых материалов, коэффициент. */
+  /** Коэффициент к цене окрашиваемых материалов. */
   markup: number
-  /** Цвет для отрисовки в редакторе. */
   render: { outer: string; inner: string; edge: string }
 }
 
-/** Элемент состава заполнения: стекло, дистанционная рамка, плёнка. */
+/** Элемент состава стеклопакета: стекло, дистанционная рамка, плёнка. */
 export interface GlazingElement {
+  id: string
   name: string
-  /** Толщина, мм. */
   thickness: number
-  /** Масса на м² (для стекла) либо на пог. м (для рамки). */
+  /** Масса: кг/м² для площадных элементов, кг/м для рамки. */
   mass: number
   materialId: string
-  /** Вид расчёта элемента: по площади либо по периметру. */
   by: 'area' | 'perimeter'
 }
 
@@ -69,76 +62,154 @@ export interface Glazing {
   id: string
   name: string
   elements: GlazingElement[]
-  /** Применимость на ВЫЧИСЛЕННОМ размере СП (план §6.4), мм и м². */
+  /** Применимость проверяется на ВЫЧИСЛЕННОМ размере СП. */
   applicability: { minW: number; maxW: number; minH: number; maxH: number; maxArea: number }
 }
 
 export type OpeningType = 'fix' | 'turn' | 'turnTilt' | 'tilt'
 
-/** Вариант комплектации фурнитуры: диапазоны фальца -> материалы. */
 export interface HardwareRange {
+  id: string
   /** Фальцевая ширина, мм. */
   fw: [number, number]
   /** Фальцевая высота, мм. */
   fh: [number, number]
-  items: { materialId: string; qty: number }[]
+  items: { id: string; materialId: string; qty: number }[]
 }
 
 export interface HardwareVariant {
   id: string
   name: string
   opening: OpeningType
-  /** Максимальная масса створки, кг. */
   maxSashMass: number
-  /** Максимальные размеры створки по фальцу, мм. */
   maxFw: number
   maxFh: number
   ranges: HardwareRange[]
 }
 
-/** База расчёта «Вида расчёта» (план §6.2). */
-export type CalcBase = 'total' | 'width' | 'height' | 'perimeter' | 'area'
-/** Размерность детали спецификации. */
+/* ─────────────── Спецификация: «Вид расчёта» (план §6.2) ─────────────── */
+
+/** База расчёта. `length` — «По длине»: база равна длине детали. */
+export type CalcBase = 'total' | 'length' | 'width' | 'height' | 'perimeter' | 'area'
 export type CalcDim = '0D' | '1D' | '2D'
 
-export interface SpecRule {
+/** Строка спецификации справочника — одинаковая у профиля, заполнения и изделия. */
+export interface SpecItem {
+  id: string
+  enabled: boolean
+  materialId: string
+  /** Цвет: собственный / как у базового артикула / без цвета. */
+  colorRule: 'own' | 'asBase' | 'none'
+  /** Кол — количество на единицу базы. */
+  count: number
+  base: CalcBase
+  /** Размер — добавка к базовому размеру, мм. */
+  size: number
+  coef: number
+  /** Шаг округления, мм (0 — без округления). */
+  step: number
+  dim: CalcDim
+  /** Параметры/условие применимости — пока справочно. */
+  note?: string
+  tag?: string
+}
+
+/* ─────────────────────── Профильная система ─────────────────────── */
+
+export interface SystemProfile {
   id: string
   name: string
-  /** К чему привязано правило. */
-  source: 'element' | 'glazing' | 'sash' | 'product' | 'joint'
-  /** Фильтр по роли профиля / типу открывания; пусто — применять ко всем. */
-  role?: ProfileRole
-  opening?: OpeningType
+  enabled: boolean
+  role: ProfileRole
   materialId: string
-  base: CalcBase
-  dim: CalcDim
-  /** Коэффициент к базовому размеру. */
-  coef: number
-  /** Добавка к базовому размеру, мм (до умножения на коэффициент). */
-  addition: number
-  /** Шаг округления результата, мм (0 — без округления). */
-  step: number
-  /** Количество на единицу базы. */
-  count: number
+  /** Спецификация профиля: сам артикул, армирование, крепёж, работы. */
+  spec: SpecItem[]
+}
+
+/** Тип контура: рама, створка, встраиваемый. Задаёт профиль каждой стороны. */
+export interface ContourType {
+  id: string
+  name: string
+  enabled: boolean
+  isFrame: boolean
+  isSash: boolean
+  /** Ссылки на SystemProfile.id по сторонам. */
+  bottom: string
+  left: string
+  top: string
+  right: string
+  /** Разделители (импосты). */
+  dividerH: string
+  dividerV: string
+  /** Системное заполнение, применяемое в этом контуре. */
+  fillingId: string
+}
+
+/**
+ * Прилегание: как контур-потомок садится на родительский профиль.
+ * dW/dH — суммарная добавка к ширине и высоте контура-потомка
+ * относительно светового проёма родителя (двойной наплав).
+ */
+export interface Adjacency {
+  id: string
+  name: string
+  enabled: boolean
+  /** Роль родительского профиля, к которому идёт прилегание. */
+  parent: ProfileRole
+  dW: number
+  dH: number
+}
+
+/** Соединение: добавка к длине детали с каждой стороны. */
+export interface Joint {
+  id: string
+  name: string
+  enabled: boolean
+  /** `corner` — угол контура, `impostT` — примыкание импоста к телу. */
+  kind: 'corner' | 'impostT'
+  role: ProfileRole
+  size: number
+}
+
+/**
+ * Заполнение системы: как стеклопакет садится в контур.
+ * dW/dH — суммарная добавка к световому проёму (двойной заход в фальц).
+ */
+export interface SystemFilling {
+  id: string
+  name: string
+  enabled: boolean
+  target: 'frame' | 'sash'
+  dW: number
+  dH: number
+  /** Спецификация заполнения: штапик, уплотнение, работы. */
+  spec: SpecItem[]
+}
+
+export interface SystemParam {
+  id: string
+  name: string
+  values: string[]
+  level: 'product' | 'contour' | 'sash'
 }
 
 export interface ProfileSystem {
   id: string
   name: string
-  /** Вид построения: от какой стороны строится изделие. */
+  /** Группа для дерева систем. */
+  group: string
+  enabled: boolean
   buildFrom: 'inside' | 'outside'
-  /** Материалы профилей по ролям — только внутри системы. */
-  profiles: Record<ProfileRole, string | undefined>
-  /** Допустимые заполнения. */
+  params: SystemParam[]
+  contours: ContourType[]
+  profiles: SystemProfile[]
+  adjacencies: Adjacency[]
+  joints: Joint[]
+  fillings: SystemFilling[]
   glazingIds: string[]
-  /** Допустимые варианты фурнитуры. */
   hardwareVariantIds: string[]
-  /** Смещения соединений, мм: на сколько деталь заходит в соседний профиль. */
-  joints: { impost: number; sash: number }
-  /** Параметры системы (план §2, SPR_PR_SYS_PARAMS). */
-  params: { name: string; values: string[]; level: 'product' | 'contour' | 'sash' }[]
-  /** Правила спецификации системы. */
-  specRuleIds: string[]
+  /** Спецификация уровня изделия: сварка, сборка, упаковка. */
+  spec: SpecItem[]
 }
 
 export interface Catalog {
@@ -147,7 +218,6 @@ export interface Catalog {
   glazings: Glazing[]
   hardware: HardwareVariant[]
   systems: ProfileSystem[]
-  rules: SpecRule[]
   currency: { code: string; symbol: string }
 }
 
@@ -172,9 +242,7 @@ export interface FieldNode {
 export interface SplitNode {
   kind: 'split'
   id: string
-  /** 'v' — вертикальный импост (делит по ширине), 'h' — горизонтальный. */
   dir: 'v' | 'h'
-  /** Доля первого потомка в световом проёме родителя, 0..1. */
   ratio: number
   children: [SceneNode, SceneNode]
 }
@@ -185,7 +253,6 @@ export interface ProductInput {
   id: string
   systemId: string
   colorId: string
-  /** Габарит по наружному краю рамы, мм. */
   width: number
   height: number
   qty: number
@@ -204,36 +271,32 @@ export interface Rect {
 
 export type ContourKind = 'frame' | 'sash'
 
-/** Профильная деталь контура. */
 export interface CalcElement {
   id: string
   contourId: string
   role: ProfileRole
+  /** Ссылка на SystemProfile, из которого выведена деталь. */
+  systemProfileId: string
   materialId: string
-  /** Длина заготовки, мм. */
   length: number
-  /** Сторона контура. */
   side: 'left' | 'right' | 'top' | 'bottom' | 'mid'
-  /** Тип реза по концам. */
   cut: [number, number]
   rect: Rect
 }
 
 export interface CalcContour {
   id: string
-  /** Человекочитаемое обозначение для сообщений и печатных форм. */
   label?: string
   kind: ContourKind
   parentId: string | null
-  /** Габарит контура (наружный), мм. */
+  contourTypeId: string
   rect: Rect
-  /** Световой проём контура, мм. */
   light: Rect
   fieldId?: string
   opening?: OpeningType
   handle?: 'left' | 'right'
   hardwareVariantId?: string
-  /** Размеры по фальцу (ФШ×ФВ) — база расчёта фурнитуры (§6.3). */
+  /** Размеры по фальцу (ФШ×ФВ) — база расчёта фурнитуры. */
   falz?: { w: number; h: number }
 }
 
@@ -242,12 +305,12 @@ export interface CalcGlazing {
   label: string
   fieldId: string
   glazingId: string
+  /** Системное заполнение, по которому вычислен габарит. */
+  fillingId: string
   rect: Rect
-  /** Габарит стеклопакета, мм. */
   size: { w: number; h: number }
   areaM2: number
   massKg: number
-  /** Нарушения применимости (§6.4). */
   issues: string[]
 }
 
@@ -256,12 +319,11 @@ export interface SpecLine {
   name: string
   unit: string
   kind: MaterialKind
+  /** Как применяется наценка за цвет: 'none' — цвет не влияет. */
+  colorRule?: 'own' | 'asBase' | 'none'
   qty: number
-  /** Длина детали, мм (1D/2D). */
   length?: number
-  /** Ширина детали, мм (2D). */
   width?: number
-  /** Итоговое количество в единицах материала (м, м², шт). */
   amount: number
   price: number
   sum: number
@@ -273,19 +335,13 @@ export interface CalcResult {
   contours: CalcContour[]
   elements: CalcElement[]
   glazings: CalcGlazing[]
-  /** Световые проёмы полей — для отрисовки и подписи размеров. */
   fields: { id: string; rect: Rect }[]
-  /** Узлы деления: проём родителя и тело импоста. */
   splits: { id: string; dir: 'v' | 'h'; region: Rect; rect: Rect }[]
   spec: SpecLine[]
-  /** Площадь изделия, м². */
   areaM2: number
-  /** Периметр изделия, мм. */
   perimeter: number
   massKg: number
-  /** Цена за единицу изделия. */
   price: number
-  /** Цена с учётом количества. */
   total: number
   issues: string[]
 }

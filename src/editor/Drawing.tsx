@@ -8,7 +8,7 @@
  */
 import { useRef } from 'react'
 import type { CalcResult, ProductInput, Rect } from '../core/types'
-import { catalog } from '../catalog'
+import { useCatalog } from '../store/catalog'
 
 interface Props {
   input: ProductInput
@@ -21,6 +21,7 @@ interface Props {
 }
 
 export function Drawing({ input, calc, selectedId, onSelect, onMoveSplit, compact }: Props) {
+  const { catalog } = useCatalog()
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<{ id: string; dir: 'v' | 'h'; region: Rect } | null>(null)
 

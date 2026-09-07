@@ -1,31 +1,33 @@
 /**
  * Операции над входной моделью изделия (дерево деления светового проёма).
- * Все функции — иммутабельные: возвращают новую модель.
+ * Все функции иммутабельны и не знают о справочниках сверх того, что передано.
  */
-import { catalog } from '../catalog'
-import type { FieldFill, ProductInput, SceneNode } from './types'
-
-/** Значения по умолчанию берутся из справочника, а не из констант кода. */
-const defaultSystem = catalog.systems[0]
-const defaultGlazingId = defaultSystem.glazingIds[0]
+import type { Catalog, FieldFill, ProductInput, SceneNode } from './types'
 
 let counter = 0
 export const nextId = (prefix: string) => `${prefix}${(++counter).toString(36)}${Date.now().toString(36).slice(-3)}`
 
-export function newField(fill?: FieldFill): SceneNode {
-  return { kind: 'field', id: nextId('F'), fill: fill ?? { type: 'glass', glazingId: defaultGlazingId } }
+export function newField(fill: FieldFill): SceneNode {
+  return { kind: 'field', id: nextId('F'), fill }
 }
 
-export function newProduct(partial: Partial<ProductInput> = {}): ProductInput {
+/** Значения по умолчанию берутся из справочника, а не из констант кода. */
+export function defaultFill(catalog: Catalog, systemId?: string): FieldFill {
+  const system = catalog.systems.find((s) => s.id === systemId) ?? catalog.systems[0]
+  return { type: 'glass', glazingId: system?.glazingIds[0] ?? catalog.glazings[0]?.id ?? '' }
+}
+
+export function newProduct(catalog: Catalog, partial: Partial<ProductInput> = {}): ProductInput {
+  const system = catalog.systems.find((s) => s.id === partial.systemId) ?? catalog.systems[0]
   return {
     id: nextId('P'),
-    systemId: defaultSystem.id,
-    colorId: catalog.colors[0].id,
+    systemId: system?.id ?? '',
+    colorId: catalog.colors[0]?.id ?? '',
     width: 1400,
     height: 1400,
     qty: 1,
     params: {},
-    root: newField(),
+    root: newField(defaultFill(catalog, system?.id)),
     ...partial,
   }
 }
@@ -41,7 +43,12 @@ export function findNode(root: SceneNode, id: string): SceneNode | null {
   return null
 }
 
-/** Список полей (листьев) слева направо, сверху вниз. */
+/** Первое поле (лист) поддерева — слева направо, сверху вниз. */
+export function firstField(node: SceneNode): SceneNode {
+  return node.kind === 'field' ? node : firstField(node.children[0])
+}
+
+/** Список полей (листьев). */
 export function listFields(root: SceneNode): string[] {
   if (root.kind === 'field') return [root.id]
   return [...listFields(root.children[0]), ...listFields(root.children[1])]
@@ -71,10 +78,14 @@ export function splitField(root: SceneNode, id: string, dir: 'v' | 'h', ratio = 
   })
 }
 
-/** Удалить импост: узел деления схлопывается в одно поле. */
+/** Удалить импост: узел деления схлопывается в одно поле с заполнением первого потомка. */
 export function removeSplit(root: SceneNode, id: string): SceneNode {
-  if (root.kind === 'split' && root.id === id) return newField()
-  return mapNode(root, id, (node) => (node.kind === 'split' ? newField() : node))
+  const collapse = (node: SceneNode): SceneNode => {
+    const leaf = firstField(node)
+    return leaf.kind === 'field' ? newField({ ...leaf.fill }) : node
+  }
+  if (root.kind === 'split' && root.id === id) return collapse(root)
+  return mapNode(root, id, (node) => (node.kind === 'split' ? collapse(node) : node))
 }
 
 export function setFill(root: SceneNode, id: string, fill: FieldFill): SceneNode {
@@ -85,7 +96,7 @@ export function setRatio(root: SceneNode, id: string, ratio: number): SceneNode 
   return mapNode(root, id, (node) => (node.kind === 'split' ? { ...node, ratio } : node))
 }
 
-/** Родительский узел деления для поля — нужен, чтобы двигать импост. */
+/** Родительский узел деления для поля — нужен, чтобы удалить или сдвинуть импост. */
 export function parentSplit(root: SceneNode, id: string): SceneNode | null {
   if (root.kind !== 'split') return null
   if (root.children.some((c) => c.id === id)) return root

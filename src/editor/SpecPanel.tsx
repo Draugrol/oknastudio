@@ -4,7 +4,7 @@
  */
 import { useState } from 'react'
 import type { CalcResult, MaterialKind } from '../core/types'
-import { catalog } from '../catalog'
+import { useCatalog } from '../store/catalog'
 
 const GROUP_TITLES: Record<MaterialKind, string> = {
   profile: 'Длинновые материалы',
@@ -15,6 +15,7 @@ const GROUP_TITLES: Record<MaterialKind, string> = {
 const ORDER: MaterialKind[] = ['profile', 'sheet', 'piece', 'work']
 
 export function SpecPanel({ calc }: { calc: CalcResult }) {
+  const { catalog } = useCatalog()
   const [open, setOpen] = useState(true)
   const money = (v: number) => `${v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${catalog.currency.symbol}`
 

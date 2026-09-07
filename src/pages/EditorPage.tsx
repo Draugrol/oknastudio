@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useOrders } from '../store/orders'
 import { calcProduct } from '../core/calc'
-import { catalog } from '../catalog'
+import { useCatalog } from '../store/catalog'
 import { Drawing } from '../editor/Drawing'
 import { PropertiesPanel } from '../editor/PropertiesPanel'
 import { SpecPanel } from '../editor/SpecPanel'
@@ -13,12 +13,13 @@ import type { ProductInput } from '../core/types'
 export function EditorPage() {
   const { orderId = '', itemId = '' } = useParams()
   const { orders, updateItem } = useOrders()
+  const { catalog } = useCatalog()
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const order = orders.find((o) => o.id === orderId)
   const item = order?.items.find((i) => i.id === itemId)
 
-  const calc = useMemo(() => (item ? calcProduct(item, catalog) : null), [item])
+  const calc = useMemo(() => (item ? calcProduct(item, catalog) : null), [item, catalog])
 
   if (!order || !item || !calc) {
     return (

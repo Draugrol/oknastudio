@@ -2,7 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import { OrdersPage } from '../pages/OrdersPage'
 import { OrderPage } from '../pages/OrderPage'
 import { EditorPage } from '../pages/EditorPage'
-import { CatalogPage } from '../pages/CatalogPage'
+import { SettingsPage } from '../pages/SettingsPage'
 
 export function App() {
   return (
@@ -24,7 +24,7 @@ export function App() {
         <Route path="/" element={<OrdersPage />} />
         <Route path="/orders/:orderId" element={<OrderPage />} />
         <Route path="/orders/:orderId/items/:itemId" element={<EditorPage />} />
-        <Route path="/catalog" element={<CatalogPage />} />
+        <Route path="/catalog" element={<SettingsPage />} />
         <Route path="*" element={<div className="page">Страница не найдена</div>} />
       </Routes>
     </div>

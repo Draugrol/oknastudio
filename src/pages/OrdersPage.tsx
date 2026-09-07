@@ -3,10 +3,11 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useOrders, ORDER_STATUSES } from '../store/orders'
 import { calcOrder } from '../core/order'
-import { catalog } from '../catalog'
+import { useCatalog } from '../store/catalog'
 
 export function OrdersPage() {
   const { orders, createOrder, removeOrder } = useOrders()
+  const { catalog } = useCatalog()
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('')
   const navigate = useNavigate()
@@ -21,7 +22,7 @@ export function OrdersPage() {
             : true,
         )
         .map((o) => ({ order: o, totals: calcOrder(o.items, catalog, o.discount) })),
-    [orders, query, status],
+    [orders, query, status, catalog],
   )
 
   const grandTotal = rows.reduce((acc, r) => acc + r.totals.total, 0)

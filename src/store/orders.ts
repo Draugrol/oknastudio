@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ProductInput } from '../core/types'
 import { newProduct, nextId } from '../core/scene'
+import { getCatalog } from './catalog'
 
 export const ORDER_STATUSES = [
   'Черновик',
@@ -33,19 +34,24 @@ export interface Order {
 const KEY = 'oknastudio.orders.v1'
 
 function seed(): Order[] {
-  const sash = newProduct({ width: 920, height: 1620 })
-  const sashField = (sash.root as { id: string }).id
+  const catalog = getCatalog()
+  const system = catalog.systems[0]
+  const glazingId = system?.glazingIds[0] ?? catalog.glazings[0]?.id ?? ''
+  const hardware =
+    catalog.hardware.find((h) => system?.hardwareVariantIds.includes(h.id) && h.opening === 'turnTilt') ??
+    catalog.hardware[0]
+  const product = newProduct(catalog, { width: 920, height: 1620 })
   const withSash: ProductInput = {
-    ...sash,
+    ...product,
     root: {
       kind: 'field',
-      id: sashField,
+      id: product.root.id,
       fill: {
         type: 'sash',
         opening: 'turnTilt',
         handle: 'right',
-        glazingId: 'GL-24-STD',
-        hardwareVariantId: 'HW-TT-STD',
+        glazingId,
+        hardwareVariantId: hardware?.id ?? '',
       },
     },
   }
@@ -137,7 +143,7 @@ export function useOrders() {
   }, [])
 
   const addItem = useCallback((orderId: string, item?: ProductInput): ProductInput => {
-    const product = item ?? newProduct()
+    const product = item ?? newProduct(getCatalog())
     setState(getState().map((o) => (o.id === orderId ? { ...o, items: [...o.items, product] } : o)))
     return product
   }, [])
