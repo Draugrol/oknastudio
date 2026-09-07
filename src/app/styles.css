@@ -1,0 +1,173 @@
+:root {
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --line: #d8dee6;
+  --line-soft: #e8ecf1;
+  --ink: #1d2733;
+  --muted: #6b7a8c;
+  --accent: #0f62fe;
+  --accent-soft: #e6efff;
+  --danger: #b42318;
+  --warn: #9a6700;
+  --ok: #17795e;
+  font-family: "Segoe UI", Inter, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+.shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ─── Верхняя панель ─── */
+.app-bar {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 0 18px;
+  height: 46px;
+  background: #1e2a38;
+  color: #e8eef5;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.brand { font-weight: 600; letter-spacing: .2px; display: flex; align-items: center; gap: 9px; }
+.brand .mark {
+  width: 15px; height: 19px; border: 2px solid #7fb0ff; border-radius: 2px;
+  background: linear-gradient(160deg, #9ec6ff 0 45%, #4b7fd1 100%);
+  box-shadow: inset 0 0 0 1px #1e2a38;
+}
+.app-bar nav { display: flex; gap: 4px; }
+.app-bar nav a {
+  color: #b9c8d8; text-decoration: none; padding: 5px 11px; border-radius: 5px; font-size: 13px;
+}
+.app-bar nav a:hover { background: #2a394b; color: #fff; }
+.app-bar nav a.active { background: #0f62fe; color: #fff; }
+.version { margin-left: auto; color: #8496a8; font-size: 12px; }
+
+/* ─── Страница ─── */
+.page { padding: 18px 20px 40px; }
+.page-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.page-head h1 { font-size: 17px; margin: 0; font-weight: 600; }
+.page-head h1 a { color: inherit; }
+.toolbar { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.tabs { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+
+/* ─── Элементы форм ─── */
+input, select, button, .button {
+  font: inherit;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  padding: 5px 9px;
+  height: 30px;
+}
+input:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+button, .button { cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+button:hover, .button:hover { background: #f3f6fa; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+button.primary:hover { background: #0b53d8; }
+button.danger { color: var(--danger); }
+button.link, .link {
+  border: none; background: none; color: var(--accent); padding: 0 4px; height: auto; font-size: 12px;
+}
+button.link.danger { color: var(--danger); }
+.tab { border-radius: 5px 5px 0 0; border-bottom-color: transparent; color: var(--muted); }
+.tab.active { background: var(--panel); color: var(--ink); font-weight: 600; border-bottom-color: var(--panel); }
+
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+label input, label select { color: var(--ink); }
+.row { display: flex; gap: 8px; }
+.row label { flex: 1; }
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 14px; }
+.form-grid .wide-field { grid-column: 1 / -1; }
+
+/* ─── Карточки и таблицы ─── */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+
+table.grid { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+table.grid th, table.grid td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+table.grid thead th { background: #f4f7fa; font-weight: 600; font-size: 12px; color: #44566a; white-space: nowrap; }
+table.grid tbody tr:hover { background: #f7fafd; }
+table.grid td.num, table.grid th.num { text-align: right; white-space: nowrap; }
+table.grid .total td { background: #f4f7fa; font-weight: 600; }
+table.grid tfoot td { background: #eef3f8; font-weight: 600; }
+.muted { color: var(--muted); }
+.center { text-align: center; }
+.strong { font-weight: 600; }
+.warn { color: var(--warn); }
+.price { font-size: 15px; font-weight: 600; margin: 6px 0; }
+
+.chip { display: inline-block; padding: 2px 8px; border-radius: 11px; font-size: 11px; background: #eceff3; color: #46586b; white-space: nowrap; }
+.chip.s-0 { background: #eceff3; }
+.chip.s-1 { background: #e6efff; color: #14479c; }
+.chip.s-2 { background: #fff4dd; color: #8a5d00; }
+.chip.s-3 { background: #e3f4ed; color: #10614a; }
+.chip.s-4 { background: #dff0d8; color: #2c6a2c; }
+.chip.s-5 { background: #e9e6f7; color: #4b3b8f; }
+
+.swatch { display: inline-block; width: 20px; height: 14px; border: 1px solid; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+
+dl.facts { margin: 0; display: grid; gap: 3px; }
+dl.facts > div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px dashed var(--line-soft); }
+dl.facts dt { color: var(--muted); }
+dl.facts dd { margin: 0; text-align: right; }
+
+/* ─── Состав заказа ─── */
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.item-card { display: flex; gap: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.item-card .thumb { width: 108px; flex: 0 0 108px; display: block; }
+.item-card .thumb svg { width: 100%; height: 150px; }
+.item-card h3 { margin: 0 0 4px; font-size: 13px; }
+.item-card p { margin: 2px 0; font-size: 12px; }
+.item-body { min-width: 0; flex: 1; }
+.totals dl.facts { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.totals dl.facts > div {
+  flex-direction: column; align-items: flex-start; gap: 2px;
+  border-bottom: none; border-left: 3px solid var(--accent-soft); padding: 2px 0 2px 10px;
+}
+.totals dl.facts dd { text-align: left; font-size: 15px; }
+
+/* ─── Редактор ─── */
+.editor { display: flex; flex-direction: column; height: calc(100vh - 46px); }
+.editor .page-head { padding: 12px 18px 10px; margin: 0; border-bottom: 1px solid var(--line); background: var(--panel); }
+.editor-body { flex: 1; display: grid; grid-template-columns: 310px minmax(0, 1fr) 470px; min-height: 0; }
+.editor-body .left, .editor-body .right { overflow: auto; background: var(--panel); }
+.editor-body .left { border-right: 1px solid var(--line); }
+.editor-body .right { border-left: 1px solid var(--line); }
+.canvas {
+  min-height: 0; padding: 22px; display: flex; align-items: center; justify-content: center;
+  background: repeating-linear-gradient(0deg, #e9edf2 0 1px, transparent 1px 24px),
+              repeating-linear-gradient(90deg, #e9edf2 0 1px, transparent 1px 24px), #f4f6f9;
+}
+.drawing { width: 100%; height: 100%; max-height: 100%; user-select: none; touch-action: none; }
+/* Клик должен попадать в зону поля, а не в подпись размера или контур профиля. */
+.drawing text, .drawing line, .drawing path { pointer-events: none; }
+
+.panel { padding: 14px; display: flex; flex-direction: column; gap: 18px; }
+.panel section { display: flex; flex-direction: column; gap: 9px; }
+.panel h3 {
+  margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #55697d;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.panel .hint { margin: 0; font-size: 12px; color: var(--muted); }
+.panel.spec table.grid { margin-bottom: 8px; font-size: 11.5px; table-layout: fixed; }
+.panel.spec table.grid th, .panel.spec table.grid td { padding: 5px 6px; overflow-wrap: break-word; }
+.panel.spec table.grid thead th { white-space: normal; }
+.panel .issues { background: #fff6e8; border: 1px solid #f0d9a8; border-radius: 6px; padding: 10px; }
+.panel .issues ul { margin: 6px 0 0; padding-left: 18px; }
+.panel .issues li { color: #8a5d00; }
+
+@media (max-width: 1200px) {
+  .editor-body { grid-template-columns: 280px minmax(0, 1fr); }
+  .editor-body .right { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--line); }
+  .editor { height: auto; }
+}
