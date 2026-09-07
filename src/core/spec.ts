@@ -11,6 +11,8 @@
  */
 import type {
   Catalog,
+  CalcDim,
+  MaterialKind,
   Condition,
   CalcElement,
   CalcGlazing,
@@ -47,6 +49,13 @@ export function baseValue(base: CalcBase, b: RuleBase): number {
   }
 }
 
+/** Размерность детали задаётся типом материала, а не строкой спецификации. */
+export function dimOfKind(kind: MaterialKind): CalcDim {
+  if (kind === 'profile') return '1D'
+  if (kind === 'sheet') return '2D'
+  return '0D'
+}
+
 export function roundStep(value: number, step: number): number {
   if (!step) return Math.round(value * 100) / 100
   return Math.round(value / step) * step
@@ -60,6 +69,7 @@ export function applySpecItem(
   source: string,
 ): Omit<SpecLine, 'price' | 'sum'> {
   const material = materialById(catalog, item.materialId)
+  const dim = dimOfKind(material.kind)
   const size = baseValue(item.base, b)
   const common = {
     materialId: material.id,
@@ -70,12 +80,12 @@ export function applySpecItem(
     source,
   }
 
-  if (item.dim === '0D') {
+  if (dim === '0D') {
     const qty = roundStep(item.count * size, item.step || 0)
     return { ...common, qty, amount: qty }
   }
 
-  if (item.dim === '1D') {
+  if (dim === '1D') {
     const length = roundStep((size + item.size) * item.coef, item.step)
     return { ...common, qty: item.count, length, amount: (item.count * length) / 1000 }
   }
@@ -228,7 +238,7 @@ export function computeSpec(data: SpecInput, catalog: Catalog): { lines: SpecLin
         name: material.name,
         unit: material.unit,
         kind: material.kind,
-        colorRule: 'own',
+        colorRule: 'asBase',
         qty: it.qty,
         amount: it.qty,
         source: `${variant.name} (${c.label ?? c.id})`,

@@ -91,10 +91,12 @@ export function SettingsPage() {
         </div>
       </header>
 
-      <p className="hint banner">
-        Изменения сохраняются сразу и тут же пересчитывают все изделия в заказах.
-        Стартовые цифры геометрии и цен требуют подтверждения технолога по узлам системы.
-      </p>
+      {section === 'Профили' && (
+        <p className="hint banner">
+          Изменения сохраняются сразу и тут же пересчитывают все изделия в заказах.
+          Стартовые цифры геометрии и цен требуют подтверждения технолога по узлам системы.
+        </p>
+      )}
 
       {section === 'Профили' && (
         <div className="systems">
@@ -111,6 +113,7 @@ export function SettingsPage() {
                     group: 'Без группы',
                     enabled: true,
                     buildFrom: 'inside',
+                    colorGroupId: draft.colorGroups[0]?.id ?? '',
                     paramIds: draft.params.map((p) => p.id),
                     contours: [],
                     profiles: [],
@@ -364,6 +367,8 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
   const [group, setGroup] = useState('')
   const groups = [...new Set(catalog.materials.map((m) => m.group))]
   const rows = catalog.materials.filter((m) => (group ? m.group === group : true))
+  const material = catalog.materials.find((m) => m.id === selected) ?? null
+  const colorGroup = catalog.colorGroups.find((g) => g.id === material?.colorGroupId)
 
   const usage = (id: string) =>
     catalog.systems.some(
@@ -377,6 +382,10 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
 
   return (
     <section>
+      <p className="hint banner">
+        Тип размера материала (длинновой / листовой / штучный / работа) определяет, как он считается
+        в спецификации — в самой строке спецификации это не задаётся.
+      </p>
       <RowToolbar
         title="Материалы"
         hasSelection={!!selected}
@@ -400,7 +409,6 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
               unit: 'м',
               price: 0,
               group: group || 'Без группы',
-              colored: false,
               geometry: { faceWidth: 0, depth: 0, massPerMeter: 0 },
             }),
           )
@@ -425,10 +433,10 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
             <th className="w-code">Артикул</th>
             <th>Наименование</th>
             <th className="w-base">Группа</th>
-            <th className="w-base">Тип</th>
+            <th className="w-base">Тип размера</th>
             <th className="w-unit">Ед.</th>
-            <th className="w-num">Цена</th>
-            <th className="w-check">Цвет</th>
+            <th className="w-num">Базовая цена</th>
+            <th className="w-base">Цветовая группа</th>
             <th className="w-num">Ширина в плане</th>
             <th className="w-num">Глубина</th>
             <th className="w-num">кг/м</th>
@@ -444,14 +452,26 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
                 target.geometry = { faceWidth: 0, depth: 0, massPerMeter: 0, ...target.geometry, ...patch }
               })
             return (
-              <tr key={m.id} className={m.id === selected ? 'selected' : undefined} onClick={() => setSelected(m.id)} onFocusCapture={() => setSelected(m.id)}>
+              <tr
+                key={m.id}
+                className={m.id === selected ? 'selected' : undefined}
+                onClick={() => setSelected(m.id)}
+                onFocusCapture={() => setSelected(m.id)}
+              >
                 <td><TextCell value={m.code} onChange={(v) => set({ code: v })} /></td>
                 <td><TextCell value={m.name} onChange={(v) => set({ name: v })} /></td>
                 <td><TextCell value={m.group} onChange={(v) => set({ group: v })} /></td>
                 <td><SelectCell value={m.kind} options={KIND_OPTIONS} onChange={(v) => set({ kind: v as MaterialKind })} /></td>
                 <td><TextCell value={m.unit} onChange={(v) => set({ unit: v })} /></td>
                 <td><NumCell value={m.price} step={0.01} onChange={(v) => set({ price: v })} /></td>
-                <td><CheckCell value={!!m.colored} onChange={(v) => set({ colored: v })} /></td>
+                <td>
+                  <SelectCell
+                    value={m.colorGroupId ?? ''}
+                    empty="— без цвета —"
+                    options={catalog.colorGroups.map((g) => ({ value: g.id, label: g.name }))}
+                    onChange={(v) => set({ colorGroupId: v || undefined })}
+                  />
+                </td>
                 <td><NumCell value={m.geometry?.faceWidth ?? 0} step={0.1} onChange={(v) => setGeom({ faceWidth: v })} /></td>
                 <td><NumCell value={m.geometry?.depth ?? 0} step={0.1} onChange={(v) => setGeom({ depth: v })} /></td>
                 <td><NumCell value={m.geometry?.massPerMeter ?? 0} step={0.01} onChange={(v) => setGeom({ massPerMeter: v })} /></td>
@@ -460,76 +480,212 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
           })}
         </tbody>
       </table>
-      <p className="hint">
-        Ширина в плане — расстояние от наружного края профиля до светового проёма; наплав и фальц задаются
-        в системе («Прилегания» и «Заполнения»), а не у материала.
-      </p>
+
+      {material && colorGroup && (
+        <div className="sub-grid">
+          <RowToolbar
+            title={`Цены по цветам «${material.name}» — группа «${colorGroup.name}»`}
+            onAdd={() =>
+              update((draft) => {
+                const target = draft.materials.find((m) => m.id === material.id)!
+                target.prices = colorGroup.colors.map((c) => ({
+                  colorId: c.id,
+                  price: target.prices?.find((p) => p.colorId === c.id)?.price ?? target.price,
+                }))
+              })
+            }
+          />
+          <table className="grid edit">
+            <thead>
+              <tr>
+                <th>Цвет</th>
+                <th className="w-code">Код</th>
+                <th className="w-num">Цена</th>
+              </tr>
+            </thead>
+            <tbody>
+              {colorGroup.colors.map((c) => {
+                const row = material.prices?.find((p) => p.colorId === c.id)
+                return (
+                  <tr key={c.id}>
+                    <td>{c.name}</td>
+                    <td className="muted">{c.code}</td>
+                    <td>
+                      <NumCell
+                        value={row?.price ?? material.price}
+                        step={0.01}
+                        onChange={(v) =>
+                          update((draft) => {
+                            const target = draft.materials.find((m) => m.id === material.id)!
+                            target.prices = target.prices ?? []
+                            const found = target.prices.find((p) => p.colorId === c.id)
+                            if (found) found.price = v
+                            else target.prices.push({ colorId: c.id, price: v })
+                          })
+                        }
+                      />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p className="hint">
+            Цена каждого цвета задаётся явно. Цвет, которого нет в списке, считается по базовой цене.
+          </p>
+        </div>
+      )}
     </section>
   )
 }
 
-/* ─────────────────────────────── Цвета ─────────────────────────────── */
+/* ─────────────────────── Цвета и цветовые группы ─────────────────────── */
 
 function ColorsEditor({ catalog, update }: { catalog: Catalog; update: Update }) {
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string>(catalog.colorGroups[0]?.id ?? '')
+  const group = catalog.colorGroups.find((g) => g.id === selected) ?? catalog.colorGroups[0]
+
   return (
     <section>
+      <p className="hint banner">
+        Цветовая группа — это набор цветов, в которых существует материал. Цена каждого цвета
+        задаётся в карточке материала («Материалы» → «Цены по цветам»), никаких коэффициентов.
+      </p>
       <RowToolbar
-        title="Цвета"
-        hasSelection={!!selected}
+        title="Цветовые группы"
+        hasSelection={!!group}
         onAdd={() =>
-          update((draft) =>
-            draft.colors.push({
-              id: newId('COL'),
-              name: 'Новый цвет',
-              markup: 1,
-              render: { outer: '#e8ecf0', inner: '#e8ecf0', edge: '#9aa6b2' },
-            }),
-          )
+          update((draft) => {
+            const id = newId('CG')
+            draft.colorGroups.push({
+              id,
+              name: 'Новая группа',
+              colors: [{ id: newId('COL'), name: 'Белый', code: '9016', render: { outer: '#f4f6f8', inner: '#e9edf1', edge: '#b9c2cc' } }],
+            })
+            setSelected(id)
+          })
         }
         onCopy={() =>
           update((draft) => {
-            const src = draft.colors.find((c) => c.id === selected)
-            if (src) draft.colors.push({ ...structuredClone(src), id: newId('COL'), name: `${src.name} (копия)` })
+            const src = draft.colorGroups.find((g) => g.id === group?.id)
+            if (!src) return
+            const copy = structuredClone(src)
+            copy.id = newId('CG')
+            copy.name = `${src.name} (копия)`
+            copy.colors = copy.colors.map((c) => ({ ...c, id: newId('COL') }))
+            draft.colorGroups.push(copy)
+            setSelected(copy.id)
           })
         }
         onDelete={() => {
-          if (catalog.colors.length <= 1) {
-            alert('Должен остаться хотя бы один цвет.')
+          if (catalog.colorGroups.length <= 1) {
+            alert('Должна остаться хотя бы одна цветовая группа.')
             return
           }
-          update((draft) => void (draft.colors = draft.colors.filter((c) => c.id !== selected)))
+          update((draft) => {
+            draft.colorGroups = draft.colorGroups.filter((g) => g.id !== group?.id)
+            setSelected(draft.colorGroups[0]?.id ?? '')
+          })
         }}
       />
       <table className="grid edit">
         <thead>
           <tr>
-            <th>Наименование</th>
-            <th className="w-num">Коэффициент цены</th>
-            <th className="w-color">Снаружи</th>
-            <th className="w-color">Изнутри</th>
-            <th className="w-color">Кромка</th>
+            <th>Цветовая группа</th>
+            <th className="w-num">Цветов</th>
+            <th className="w-num">Материалов</th>
           </tr>
         </thead>
         <tbody>
-          {catalog.colors.map((c) => {
-            const set = (patch: Partial<typeof c>) =>
-              update((draft) => Object.assign(draft.colors.find((x) => x.id === c.id)!, patch))
-            const setRender = (patch: Partial<typeof c.render>) =>
-              update((draft) => Object.assign(draft.colors.find((x) => x.id === c.id)!.render, patch))
-            return (
-              <tr key={c.id} className={c.id === selected ? 'selected' : undefined} onClick={() => setSelected(c.id)} onFocusCapture={() => setSelected(c.id)}>
-                <td><TextCell value={c.name} onChange={(v) => set({ name: v })} /></td>
-                <td><NumCell value={c.markup} step={0.01} min={0} onChange={(v) => set({ markup: v })} /></td>
-                <td><input className="cell color" type="color" value={c.render.outer} onChange={(e) => setRender({ outer: e.target.value })} /></td>
-                <td><input className="cell color" type="color" value={c.render.inner} onChange={(e) => setRender({ inner: e.target.value })} /></td>
-                <td><input className="cell color" type="color" value={c.render.edge} onChange={(e) => setRender({ edge: e.target.value })} /></td>
-              </tr>
-            )
-          })}
+          {catalog.colorGroups.map((g) => (
+            <tr
+              key={g.id}
+              className={g.id === group?.id ? 'selected' : undefined}
+              onClick={() => setSelected(g.id)}
+              onFocusCapture={() => setSelected(g.id)}
+            >
+              <td>
+                <TextCell
+                  value={g.name}
+                  onChange={(v) => update((draft) => void (draft.colorGroups.find((x) => x.id === g.id)!.name = v))}
+                />
+              </td>
+              <td className="num muted">{g.colors.length}</td>
+              <td className="num muted">{catalog.materials.filter((m) => m.colorGroupId === g.id).length}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
-      <p className="hint">Коэффициент умножает цену материалов, отмеченных признаком «Цвет».</p>
+
+      {group && (
+        <div className="sub-grid">
+          <RowToolbar
+            title={`Цвета группы «${group.name}»`}
+            onAdd={() =>
+              update((draft) =>
+                draft.colorGroups
+                  .find((g) => g.id === group.id)!
+                  .colors.push({
+                    id: newId('COL'),
+                    name: 'Новый цвет',
+                    code: '',
+                    render: { outer: '#e8ecf0', inner: '#e8ecf0', edge: '#9aa6b2' },
+                  }),
+              )
+            }
+          />
+          <table className="grid edit">
+            <thead>
+              <tr>
+                <th>Цвет</th>
+                <th className="w-code">Код</th>
+                <th className="w-color">Снаружи</th>
+                <th className="w-color">Изнутри</th>
+                <th className="w-color">Кромка</th>
+                <th className="w-check" />
+              </tr>
+            </thead>
+            <tbody>
+              {group.colors.map((c) => {
+                const set = (patch: Partial<typeof c>) =>
+                  update((draft) =>
+                    Object.assign(draft.colorGroups.find((g) => g.id === group.id)!.colors.find((x) => x.id === c.id)!, patch),
+                  )
+                const setRender = (patch: Partial<typeof c.render>) =>
+                  update((draft) =>
+                    Object.assign(
+                      draft.colorGroups.find((g) => g.id === group.id)!.colors.find((x) => x.id === c.id)!.render,
+                      patch,
+                    ),
+                  )
+                return (
+                  <tr key={c.id}>
+                    <td><TextCell value={c.name} onChange={(v) => set({ name: v })} /></td>
+                    <td><TextCell value={c.code} onChange={(v) => set({ code: v })} /></td>
+                    <td><input className="cell color" type="color" value={c.render.outer} onChange={(e) => setRender({ outer: e.target.value })} /></td>
+                    <td><input className="cell color" type="color" value={c.render.inner} onChange={(e) => setRender({ inner: e.target.value })} /></td>
+                    <td><input className="cell color" type="color" value={c.render.edge} onChange={(e) => setRender({ edge: e.target.value })} /></td>
+                    <td>
+                      <button
+                        className="link danger"
+                        onClick={() =>
+                          update((draft) => {
+                            const target = draft.colorGroups.find((g) => g.id === group.id)!
+                            if (target.colors.length <= 1) return
+                            target.colors = target.colors.filter((x) => x.id !== c.id)
+                          })
+                        }
+                      >
+                        удалить
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }

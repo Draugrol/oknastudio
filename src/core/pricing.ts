@@ -1,17 +1,22 @@
 /**
  * Ценообразование (план §6.5).
- * Цена = Σ(деталь × цена материала × коэффициент цвета) + работы; далее скидки/наценки заказа.
+ *
+ * Цена материала берётся по цвету изделия из его цветовой группы —
+ * так же, как в карточке материала IT Окна. Никаких коэффициентов:
+ * цена каждого цвета задаётся явно, а чего нет в списке — идёт по базовой.
  */
-import type { Catalog, SpecLine } from './types'
+import type { Catalog, Material, SpecLine } from './types'
 import { materialById } from './geometry'
 
+export function priceOf(material: Material, colorId: string, colorRule?: 'asBase' | 'none'): number {
+  if (colorRule === 'none' || !material.colorGroupId) return material.price
+  return material.prices?.find((p) => p.colorId === colorId)?.price ?? material.price
+}
+
 export function priceSpec(lines: SpecLine[], catalog: Catalog, colorId: string): SpecLine[] {
-  const color = catalog.colors.find((c) => c.id === colorId)
-  const markup = color?.markup ?? 1
   return lines.map((line) => {
     const material = materialById(catalog, line.materialId)
-    const colored = material.colored && line.colorRule !== 'none'
-    const price = round2(material.price * (colored ? markup : 1))
+    const price = round2(priceOf(material, colorId, line.colorRule))
     return { ...line, price, sum: round2(price * line.amount) }
   })
 }

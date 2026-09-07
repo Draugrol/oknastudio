@@ -30,21 +30,36 @@ export interface Material {
   id: string
   code: string
   name: string
+  /** Тип размера: длинновой / листовой / штучный / работа. Задаёт размерность
+   *  строки спецификации — в самой строке размерность не дублируется. */
   kind: MaterialKind
   unit: string
+  /** Базовая цена: используется без цвета и как запасная. */
   price: number
   group: string
   geometry?: ProfileGeometry
-  /** Материал имеет цветовые исполнения — к цене применяется наценка за цвет. */
-  colored?: boolean
+  /** Цветовая группа материала; пусто — материал без цвета. */
+  colorGroupId?: string
+  /** Цены по цветам своей группы. Чего нет в списке — считается по базовой цене. */
+  prices?: { colorId: string; price: number }[]
 }
 
-export interface ColorScheme {
+/** Цвет внутри цветовой группы: «Белый 9016», «Антрацит 7024». */
+export interface ColorItem {
   id: string
   name: string
-  /** Коэффициент к цене окрашиваемых материалов. */
-  markup: number
+  code: string
   render: { outer: string; inner: string; edge: string }
+}
+
+/**
+ * Цветовая группа материала: набор цветов, в которых материал существует.
+ * Цена задаётся по каждому цвету явно (Material.prices), коэффициентов нет.
+ */
+export interface ColorGroup {
+  id: string
+  name: string
+  colors: ColorItem[]
 }
 
 /** Элемент состава стеклопакета: стекло, дистанционная рамка, плёнка. */
@@ -131,6 +146,7 @@ export interface HardwareVariant {
 
 /** База расчёта. `length` — «По длине»: база равна длине детали. */
 export type CalcBase = 'total' | 'length' | 'width' | 'height' | 'perimeter' | 'area'
+/** Размерность детали — выводится из типа материала, а не задаётся в строке. */
 export type CalcDim = '0D' | '1D' | '2D'
 
 /** Строка спецификации справочника — одинаковая у профиля, заполнения и изделия. */
@@ -138,8 +154,8 @@ export interface SpecItem {
   id: string
   enabled: boolean
   materialId: string
-  /** Цвет: собственный / как у базового артикула / без цвета. */
-  colorRule: 'own' | 'asBase' | 'none'
+  /** Цвет: «как у изделия» (цена по цвету) либо «без цвета» (базовая цена). */
+  colorRule: 'asBase' | 'none'
   /** Кол — количество на единицу базы. */
   count: number
   base: CalcBase
@@ -148,7 +164,6 @@ export interface SpecItem {
   coef: number
   /** Шаг округления, мм (0 — без округления). */
   step: number
-  dim: CalcDim
   /** Параметры: условия применимости строки. Пусто — строка считается всегда. */
   conditions: Condition[]
   tag?: string
@@ -233,6 +248,8 @@ export interface ProfileSystem {
   group: string
   enabled: boolean
   buildFrom: 'inside' | 'outside'
+  /** Цветовая группа, из которой выбирается цвет изделия. */
+  colorGroupId: string
   /** Параметры справочника, применимые к системе. */
   paramIds: string[]
   contours: ContourType[]
@@ -248,7 +265,7 @@ export interface ProfileSystem {
 
 export interface Catalog {
   materials: Material[]
-  colors: ColorScheme[]
+  colorGroups: ColorGroup[]
   params: Param[]
   glazings: Glazing[]
   hardware: HardwareVariant[]
@@ -362,8 +379,8 @@ export interface SpecLine {
   name: string
   unit: string
   kind: MaterialKind
-  /** Как применяется наценка за цвет: 'none' — цвет не влияет. */
-  colorRule?: 'own' | 'asBase' | 'none'
+  /** Как взята цена: 'asBase' — по цвету изделия, 'none' — базовая. */
+  colorRule?: 'asBase' | 'none'
   qty: number
   length?: number
   width?: number

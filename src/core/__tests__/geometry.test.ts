@@ -115,7 +115,7 @@ describe('правка справочника меняет расчёт', () => 
     const frame = system.profiles.find((p) => p.role === 'frame')!
     const item: SpecItem = {
       id: 'SI-TEST', enabled: true, materialId: 'W-WELD', colorRule: 'none',
-      count: 2, base: 'total', size: 0, coef: 1, step: 0, dim: '0D', conditions: [],
+      count: 2, base: 'total', size: 0, coef: 1, step: 0, conditions: [],
     }
     const before = calcProduct(singleSash(cat), cat).price
     frame.spec.push(item)
@@ -226,7 +226,7 @@ describe('поле без заполнения', () => {
 describe('движок спецификации «Вид расчёта»', () => {
   const item = (o: Partial<SpecItem>): SpecItem => ({
     id: 'X', enabled: true, materialId: 'M-REINF-FRAME', colorRule: 'none',
-    count: 1, base: 'length', size: 0, coef: 1, step: 0, dim: '1D', conditions: [], ...o,
+    count: 1, base: 'length', size: 0, coef: 1, step: 0, conditions: [], ...o,
   })
 
   it('базы расчёта', () => {
@@ -253,7 +253,7 @@ describe('движок спецификации «Вид расчёта»', () =
 
   it('0D по площади: количество = Кол · База', () => {
     const line = applySpecItem(
-      item({ materialId: 'W-ASSEMBLY', base: 'area', dim: '0D' }),
+      item({ materialId: 'W-ASSEMBLY', base: 'area' }),
       { width: 1000, height: 2000, length: 0 },
       catalog,
       't',
@@ -286,13 +286,32 @@ describe('расчёт изделия целиком', () => {
     expect(sash.massKg).toBeLessThan(calc.massKg)
   })
 
-  it('наценка за цвет применяется только к окрашиваемым материалам', () => {
+  it('цена берётся по цвету изделия из цен материала, а не по коэффициенту', () => {
     const white = calcProduct(singleSash(), catalog)
     const oak = calcProduct({ ...singleSash(), colorId: 'COL-OAK' }, catalog)
-    expect(oak.price).toBeGreaterThan(white.price)
+    const frameWhite = white.spec.find((l) => l.materialId === 'M-SL70-FRAME')!
+    const frameOak = oak.spec.find((l) => l.materialId === 'M-SL70-FRAME')!
+    expect(frameWhite.price).toBe(620)
+    expect(frameOak.price).toBe(837) // задано в справочнике явно
+    // стекло без цветовой группы — цена не меняется
     expect(oak.spec.find((l) => l.materialId === 'M-GLASS-4')!.price).toBe(
       white.spec.find((l) => l.materialId === 'M-GLASS-4')!.price,
     )
+    expect(oak.price).toBeGreaterThan(white.price)
+  })
+
+  it('цвет вне списка цен материала считается по базовой цене', () => {
+    const cat = clone()
+    cat.materials.find((m) => m.id === 'M-SL70-FRAME')!.prices = [{ colorId: 'COL-WHITE', price: 620 }]
+    const oak = calcProduct({ ...singleSash(cat), colorId: 'COL-OAK' }, cat)
+    expect(oak.spec.find((l) => l.materialId === 'M-SL70-FRAME')!.price).toBe(620)
+  })
+
+  it('размерность строки берётся из типа материала', () => {
+    const result = calcProduct(singleSash(), catalog)
+    // длинновой материал даёт длину детали, штучный — только количество
+    expect(result.spec.find((l) => l.materialId === 'M-SEAL-FRAME')!.length).toBeGreaterThan(0)
+    expect(result.spec.find((l) => l.materialId === 'M-HW-HINGE')!.length).toBeUndefined()
   })
 
   it('нарушение применимости заполнения попадает в issues', () => {

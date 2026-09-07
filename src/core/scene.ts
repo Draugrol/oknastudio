@@ -19,10 +19,11 @@ export function defaultFill(catalog: Catalog, systemId?: string): FieldFill {
 
 export function newProduct(catalog: Catalog, partial: Partial<ProductInput> = {}): ProductInput {
   const system = catalog.systems.find((s) => s.id === partial.systemId) ?? catalog.systems[0]
+  const group = catalog.colorGroups.find((g) => g.id === system?.colorGroupId) ?? catalog.colorGroups[0]
   return {
     id: nextId('P'),
     systemId: system?.id ?? '',
-    colorId: catalog.colors[0]?.id ?? '',
+    colorId: group?.colors[0]?.id ?? '',
     width: 1400,
     height: 1400,
     qty: 1,

@@ -9,8 +9,21 @@ import { SpecItemsEditor, newSpecItem } from './SpecItemsEditor'
 import { newId } from '../store/catalog'
 import { roleTitle } from '../core/geometry'
 
-const TABS = ['Общие', 'Параметры', 'Контура', 'Профили', 'Прилегания', 'Соединения', 'Заполнения', 'Фурнитура'] as const
+/** Порядок настройки системы: сверху вниз, как заполняют технологи. */
+const TABS = ['Общие', 'Профили', 'Контура', 'Прилегания', 'Соединения', 'Заполнения', 'Фурнитура', 'Параметры'] as const
 type Tab = (typeof TABS)[number]
+
+/** Что задаёт вкладка и на что это влияет — подсказка над таблицей. */
+const TAB_HINT: Record<Tab, string> = {
+  Общие: 'Название системы, цветовая группа изделия и работы уровня изделия.',
+  Профили: 'Какие профили есть в системе: роль, материал и спецификация каждого — что списывается вместе с ним.',
+  Контура: 'Из каких профилей собирается рама и створка: профиль каждой стороны, импосты и заполнение.',
+  Прилегания: 'Насколько створка перекрывает раму или импост — отсюда берётся габарит створки.',
+  Соединения: 'Насколько деталь длиннее габарита: сварной угол обычно 0, импост заходит в фальц.',
+  Заполнения: 'Насколько стеклопакет заходит под профиль — отсюда берётся габарит СП, и что списывается вместе с ним.',
+  Фурнитура: 'Какие варианты комплектации доступны в системе. Сами комплекты — в справочнике «Фурнитура».',
+  Параметры: 'Какие параметры доступны в системе. На них ссылаются условия строк спецификации и фурнитуры.',
+}
 
 const ROLES: ProfileRole[] = ['frame', 'sash', 'impost', 'shtulp', 'bead', 'reinforcement', 'none']
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: roleTitle(r) }))
@@ -47,12 +60,14 @@ export function SystemEditor({
   return (
     <div className="sys-editor">
       <div className="tabs sub">
-        {TABS.map((t) => (
+        {TABS.map((t, i) => (
           <button key={t} className={t === tab ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-            {t}
+            {i > 0 ? `${i}. ${t}` : t}
           </button>
         ))}
       </div>
+
+      <p className="tab-hint">{TAB_HINT[tab]}</p>
 
       {tab === 'Общие' && (
         <section className="card">
@@ -73,6 +88,19 @@ export function SystemEditor({
               >
                 <option value="inside">Изнутри</option>
                 <option value="outside">Снаружи</option>
+              </select>
+            </label>
+            <label>
+              Цветовая группа изделия
+              <select
+                value={system.colorGroupId}
+                onChange={(e) => mutate((s) => void (s.colorGroupId = e.target.value))}
+              >
+                {catalog.colorGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="check-line">
@@ -302,9 +330,9 @@ export function SystemEditor({
               <tr>
                 <th className="w-check">Исп.</th>
                 <th>Наименование</th>
-                <th className="w-base">Родительский профиль</th>
-                <th className="w-num">dW</th>
-                <th className="w-num">dH</th>
+                <th className="w-base">К какому профилю</th>
+                <th className="w-num">Наплав по ширине, мм</th>
+                <th className="w-num">Наплав по высоте, мм</th>
               </tr>
             </thead>
             <tbody>
@@ -324,8 +352,9 @@ export function SystemEditor({
             </tbody>
           </table>
           <p className="hint">
-            dW / dH — суммарная добавка к ширине и высоте створки относительно светового проёма родителя
-            (двойной наплав). Знак и семантику нужно сверить с эталонным расчётом до запуска в производство.
+            Это суммарная добавка к ширине и высоте створки относительно светового проёма родителя
+            (то есть двойной наплав: 64 мм = по 32 мм на сторону). В IT Окна те же величины называются
+            dW / dH; их знак и трактовку нужно сверить с эталонным расчётом до запуска в производство.
           </p>
         </section>
       )}
@@ -353,7 +382,7 @@ export function SystemEditor({
                 <th>Наименование</th>
                 <th className="w-base">Вид</th>
                 <th className="w-base">Роль профиля</th>
-                <th className="w-num">Размер, мм</th>
+                <th className="w-num">Добавка к длине, мм</th>
               </tr>
             </thead>
             <tbody>
@@ -381,7 +410,10 @@ export function SystemEditor({
               })}
             </tbody>
           </table>
-          <p className="hint">Размер — добавка к длине детали с каждой стороны: у сварного угла 0, у импоста — заход в фальц.</p>
+          <p className="hint">
+            Добавка считается с каждой стороны детали: у сварного угла 45/45 она равна 0 (длина = габарит контура),
+            у импоста это заход в фальц соседнего профиля.
+          </p>
         </section>
       )}
 
@@ -422,8 +454,8 @@ export function SystemEditor({
                 <th className="w-check">Исп.</th>
                 <th>Наименование</th>
                 <th className="w-base">Контур</th>
-                <th className="w-num">dW</th>
-                <th className="w-num">dH</th>
+                <th className="w-num">Заход в фальц по ширине, мм</th>
+                <th className="w-num">Заход в фальц по высоте, мм</th>
                 <th className="w-num">Строк спец.</th>
               </tr>
             </thead>

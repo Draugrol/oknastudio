@@ -21,6 +21,7 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
   const [hardwareOpen, setHardwareOpen] = useState(false)
 
   const system = catalog.systems.find((s) => s.id === item.systemId)!
+  const colors = catalog.colorGroups.find((g) => g.id === system.colorGroupId)?.colors ?? []
   const glazings = catalog.glazings.filter((g) => system.glazingIds.includes(g.id))
   const productParams = catalog.params.filter(
     (p) => system.paramIds.includes(p.id) && p.level === 'product' && !p.hidden,
@@ -41,6 +42,7 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
 
   const changeSystem = (systemId: string) => {
     const next = catalog.systems.find((s) => s.id === systemId)!
+    const nextColors = catalog.colorGroups.find((g) => g.id === next.colorGroupId)?.colors ?? []
     // Заполнения и фурнитура принадлежат системе: при смене приводим к допустимым.
     const fixFill = (fill: FieldFill): FieldFill => {
       const glazingId = !fill.glazingId || next.glazingIds.includes(fill.glazingId) ? fill.glazingId : next.glazingIds[0]
@@ -54,7 +56,8 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
     }
     const walk = (n: ProductInput['root']): ProductInput['root'] =>
       n.kind === 'field' ? { ...n, fill: fixFill(n.fill) } : { ...n, children: [walk(n.children[0]), walk(n.children[1])] }
-    onChange({ ...item, systemId, root: walk(item.root) })
+    const colorId = nextColors.some((c) => c.id === item.colorId) ? item.colorId : (nextColors[0]?.id ?? item.colorId)
+    onChange({ ...item, systemId, colorId, root: walk(item.root) })
   }
 
   const setFieldFill = (fill: FieldFill) => {
@@ -79,9 +82,9 @@ export function PropertiesPanel({ item, calc, selectedId, onChange, onSelect }: 
         <label>
           Цвет
           <select value={item.colorId} onChange={(e) => patch({ colorId: e.target.value })}>
-            {catalog.colors.map((c) => (
+            {colors.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {c.name} · {c.code}
               </option>
             ))}
           </select>

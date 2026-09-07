@@ -8,7 +8,7 @@
  * подобраны под контрольный кейс плана §11.5:
  *   рама 920×1620 -> створка 844×1544 -> СП 666×1366.
  */
-import type { Catalog, CalcBase, CalcDim, Condition, SpecItem } from '../core/types'
+import type { Catalog, CalcBase, Condition, SpecItem } from '../core/types'
 
 let seq = 0
 const sid = (p: string) => `${p}${++seq}`
@@ -16,19 +16,18 @@ const sid = (p: string) => `${p}${++seq}`
 /** Строка спецификации со значениями по умолчанию — как «Добавить» в IT Окна. */
 function spec(
   materialId: string,
-  o: Partial<Omit<SpecItem, 'id' | 'materialId'>> & { base?: CalcBase; dim?: CalcDim } = {},
+  o: Partial<Omit<SpecItem, 'id' | 'materialId'>> & { base?: CalcBase } = {},
 ): SpecItem {
   return {
     id: sid('SI'),
     enabled: true,
     materialId,
-    colorRule: 'own',
+    colorRule: 'asBase',
     count: 1,
     base: 'length',
     size: 0,
     coef: 1,
     step: 0,
-    dim: '1D',
     conditions: [],
     ...o,
   }
@@ -95,24 +94,30 @@ export const defaultCatalog: Catalog = {
     },
   ],
 
-  colors: [
-    { id: 'COL-WHITE', name: 'Белый', markup: 1, render: { outer: '#f4f6f8', inner: '#e9edf1', edge: '#b9c2cc' } },
-    { id: 'COL-OAK', name: 'Золотой дуб (ламинация снаружи)', markup: 1.35, render: { outer: '#b4823a', inner: '#eef1f4', edge: '#8a6a3a' } },
-    { id: 'COL-ANTHRACITE', name: 'Антрацит (ламинация двусторонняя)', markup: 1.55, render: { outer: '#4a4f55', inner: '#4a4f55', edge: '#2f3338' } },
+  colorGroups: [
+    {
+      id: 'CG-PVC',
+      name: 'Цвета ПВХ-профиля',
+      colors: [
+        { id: 'COL-WHITE', name: 'Белый', code: '9016', render: { outer: '#f4f6f8', inner: '#e9edf1', edge: '#b9c2cc' } },
+        { id: 'COL-OAK', name: 'Золотой дуб (ламинация снаружи)', code: '2178', render: { outer: '#b4823a', inner: '#eef1f4', edge: '#8a6a3a' } },
+        { id: 'COL-ANTHRACITE', name: 'Антрацит (ламинация двусторонняя)', code: '7016', render: { outer: '#4a4f55', inner: '#4a4f55', edge: '#2f3338' } },
+      ],
+    },
   ],
 
   materials: [
     /* ── VEKA Softline 70 ── */
-    { id: 'M-SL70-FRAME', code: '103.209', name: 'Рама VEKA Softline 70', kind: 'profile', unit: 'м', price: 620, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 70, depth: 70, massPerMeter: 1.25 } },
-    { id: 'M-SL70-SASH', code: '103.380', name: 'Створка VEKA Softline 70', kind: 'profile', unit: 'м', price: 720, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 108, depth: 70, massPerMeter: 1.6 } },
-    { id: 'M-SL70-IMPOST', code: '103.191', name: 'Импост VEKA Softline 70', kind: 'profile', unit: 'м', price: 690, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 82, depth: 70, massPerMeter: 1.5 } },
-    { id: 'M-SL70-BEAD', code: '103.585', name: 'Штапик VEKA Softline 70', kind: 'profile', unit: 'м', price: 145, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 20, depth: 24, massPerMeter: 0.18 } },
+    { id: 'M-SL70-FRAME', code: '103.209', name: 'Рама VEKA Softline 70', kind: 'profile', unit: 'м', price: 620, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 620 }, { colorId: 'COL-OAK', price: 837 }, { colorId: 'COL-ANTHRACITE', price: 961 }], geometry: { faceWidth: 70, depth: 70, massPerMeter: 1.25 } },
+    { id: 'M-SL70-SASH', code: '103.380', name: 'Створка VEKA Softline 70', kind: 'profile', unit: 'м', price: 720, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 720 }, { colorId: 'COL-OAK', price: 972 }, { colorId: 'COL-ANTHRACITE', price: 1116 }], geometry: { faceWidth: 108, depth: 70, massPerMeter: 1.6 } },
+    { id: 'M-SL70-IMPOST', code: '103.191', name: 'Импост VEKA Softline 70', kind: 'profile', unit: 'м', price: 690, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 690 }, { colorId: 'COL-OAK', price: 932 }, { colorId: 'COL-ANTHRACITE', price: 1070 }], geometry: { faceWidth: 82, depth: 70, massPerMeter: 1.5 } },
+    { id: 'M-SL70-BEAD', code: '103.585', name: 'Штапик VEKA Softline 70', kind: 'profile', unit: 'м', price: 145, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 145 }, { colorId: 'COL-OAK', price: 196 }, { colorId: 'COL-ANTHRACITE', price: 225 }], geometry: { faceWidth: 20, depth: 24, massPerMeter: 0.18 } },
 
     /* ── REHAU Blitz 60 (контрольная вторая система) ── */
-    { id: 'M-BL60-FRAME', code: '213.001', name: 'Рама REHAU Blitz 60', kind: 'profile', unit: 'м', price: 480, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 58, depth: 60, massPerMeter: 1.1 } },
-    { id: 'M-BL60-SASH', code: '213.002', name: 'Створка REHAU Blitz 60', kind: 'profile', unit: 'м', price: 560, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 96, depth: 60, massPerMeter: 1.42 } },
-    { id: 'M-BL60-IMPOST', code: '213.003', name: 'Импост REHAU Blitz 60', kind: 'profile', unit: 'м', price: 520, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 76, depth: 60, massPerMeter: 1.32 } },
-    { id: 'M-BL60-BEAD', code: '213.010', name: 'Штапик REHAU Blitz 60', kind: 'profile', unit: 'м', price: 130, group: 'Профиль ПВХ', colored: true, geometry: { faceWidth: 19, depth: 22, massPerMeter: 0.16 } },
+    { id: 'M-BL60-FRAME', code: '213.001', name: 'Рама REHAU Blitz 60', kind: 'profile', unit: 'м', price: 480, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 480 }, { colorId: 'COL-OAK', price: 648 }, { colorId: 'COL-ANTHRACITE', price: 744 }], geometry: { faceWidth: 58, depth: 60, massPerMeter: 1.1 } },
+    { id: 'M-BL60-SASH', code: '213.002', name: 'Створка REHAU Blitz 60', kind: 'profile', unit: 'м', price: 560, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 560 }, { colorId: 'COL-OAK', price: 756 }, { colorId: 'COL-ANTHRACITE', price: 868 }], geometry: { faceWidth: 96, depth: 60, massPerMeter: 1.42 } },
+    { id: 'M-BL60-IMPOST', code: '213.003', name: 'Импост REHAU Blitz 60', kind: 'profile', unit: 'м', price: 520, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 520 }, { colorId: 'COL-OAK', price: 702 }, { colorId: 'COL-ANTHRACITE', price: 806 }], geometry: { faceWidth: 76, depth: 60, massPerMeter: 1.32 } },
+    { id: 'M-BL60-BEAD', code: '213.010', name: 'Штапик REHAU Blitz 60', kind: 'profile', unit: 'м', price: 130, group: 'Профиль ПВХ', colorGroupId: 'CG-PVC', prices: [{ colorId: 'COL-WHITE', price: 130 }, { colorId: 'COL-OAK', price: 176 }, { colorId: 'COL-ANTHRACITE', price: 202 }], geometry: { faceWidth: 19, depth: 22, massPerMeter: 0.16 } },
 
     /* ── Армирование ── */
     { id: 'M-REINF-FRAME', code: 'AR-1.5', name: 'Армирование рамное 1.5 мм', kind: 'profile', unit: 'м', price: 210, group: 'Армирование', geometry: { faceWidth: 30, depth: 30, massPerMeter: 1.05 } },
@@ -226,6 +231,7 @@ export const defaultCatalog: Catalog = {
       group: 'VEKA',
       enabled: true,
       buildFrom: 'inside',
+      colorGroupId: 'CG-PVC',
       glazingIds: ['GL-24-STD', 'GL-32-ENERGY'],
       hardwareVariantIds: ['HW-TT-STD', 'HW-TURN-STD', 'HW-TILT-STD'],
       paramIds: ['PAR-HANDLE-COLOR', 'PAR-CHILD-LOCK', 'PAR-SEAL-COLOR'],
@@ -233,26 +239,26 @@ export const defaultCatalog: Catalog = {
         {
           id: 'SP-SL70-FRAME', name: 'Рама 70 Softline', enabled: true, role: 'frame', materialId: 'M-SL70-FRAME',
           spec: [
-            spec('M-SL70-FRAME', { base: 'length', dim: '1D', step: 1 }),
-            spec('M-REINF-FRAME', { base: 'length', dim: '1D', size: -60, step: 5, colorRule: 'none' }),
-            spec('M-SEAL-FRAME', { base: 'length', dim: '1D', step: 1, colorRule: 'none', conditions: [cond('PAR-SEAL-COLOR', 'Чёрный')] }),
-            spec('M-SEAL-FRAME-GR', { base: 'length', dim: '1D', step: 1, colorRule: 'none', conditions: [cond('PAR-SEAL-COLOR', 'Серый')] }),
-            spec('W-REINF-CUT', { base: 'total', dim: '0D', count: 1, colorRule: 'none' }),
+            spec('M-SL70-FRAME', { base: 'length', step: 1 }),
+            spec('M-REINF-FRAME', { base: 'length', size: -60, step: 5, colorRule: 'none' }),
+            spec('M-SEAL-FRAME', { base: 'length', step: 1, colorRule: 'none', conditions: [cond('PAR-SEAL-COLOR', 'Чёрный')] }),
+            spec('M-SEAL-FRAME-GR', { base: 'length', step: 1, colorRule: 'none', conditions: [cond('PAR-SEAL-COLOR', 'Серый')] }),
+            spec('W-REINF-CUT', { base: 'total', count: 1, colorRule: 'none' }),
           ],
         },
         {
           id: 'SP-SL70-SASH', name: 'Створка 108 Softline', enabled: true, role: 'sash', materialId: 'M-SL70-SASH',
           spec: [
-            spec('M-SL70-SASH', { base: 'length', dim: '1D', step: 1 }),
-            spec('M-REINF-SASH', { base: 'length', dim: '1D', size: -50, step: 5, colorRule: 'none' }),
-            spec('M-SEAL-SASH', { base: 'length', dim: '1D', step: 1, colorRule: 'none' }),
+            spec('M-SL70-SASH', { base: 'length', step: 1 }),
+            spec('M-REINF-SASH', { base: 'length', size: -50, step: 5, colorRule: 'none' }),
+            spec('M-SEAL-SASH', { base: 'length', step: 1, colorRule: 'none' }),
           ],
         },
         {
           id: 'SP-SL70-IMPOST', name: 'Импост 82 Softline', enabled: true, role: 'impost', materialId: 'M-SL70-IMPOST',
           spec: [
-            spec('M-SL70-IMPOST', { base: 'length', dim: '1D', step: 1 }),
-            spec('M-REINF-IMPOST', { base: 'length', dim: '1D', size: -30, step: 5, colorRule: 'none' }),
+            spec('M-SL70-IMPOST', { base: 'length', step: 1 }),
+            spec('M-REINF-IMPOST', { base: 'length', size: -30, step: 5, colorRule: 'none' }),
           ],
         },
       ],
@@ -273,23 +279,23 @@ export const defaultCatalog: Catalog = {
         {
           id: 'FL-SL70-FRAME', name: 'Заполнение / рама', enabled: true, target: 'frame', dW: 38, dH: 38,
           spec: [
-            spec('M-SL70-BEAD', { base: 'perimeter', dim: '1D', step: 1 }),
-            spec('M-SEAL-GLASS', { base: 'perimeter', dim: '1D', coef: 2, step: 1, colorRule: 'none' }),
-            spec('W-GLAZE', { base: 'area', dim: '0D', colorRule: 'none' }),
+            spec('M-SL70-BEAD', { base: 'perimeter', step: 1 }),
+            spec('M-SEAL-GLASS', { base: 'perimeter', coef: 2, step: 1, colorRule: 'none' }),
+            spec('W-GLAZE', { base: 'area', colorRule: 'none' }),
           ],
         },
         {
           id: 'FL-SL70-SASH', name: 'Заполнение / створка', enabled: true, target: 'sash', dW: 38, dH: 38,
           spec: [
-            spec('M-SL70-BEAD', { base: 'perimeter', dim: '1D', step: 1 }),
-            spec('M-SEAL-GLASS', { base: 'perimeter', dim: '1D', coef: 2, step: 1, colorRule: 'none' }),
-            spec('W-GLAZE', { base: 'area', dim: '0D', colorRule: 'none' }),
+            spec('M-SL70-BEAD', { base: 'perimeter', step: 1 }),
+            spec('M-SEAL-GLASS', { base: 'perimeter', coef: 2, step: 1, colorRule: 'none' }),
+            spec('W-GLAZE', { base: 'area', colorRule: 'none' }),
           ],
         },
       ],
       spec: [
-        spec('W-WELD', { base: 'total', dim: '0D', count: 4, colorRule: 'none' }),
-        spec('W-ASSEMBLY', { base: 'area', dim: '0D', colorRule: 'none' }),
+        spec('W-WELD', { base: 'total', count: 4, colorRule: 'none' }),
+        spec('W-ASSEMBLY', { base: 'area', colorRule: 'none' }),
       ],
     },
 
@@ -299,6 +305,7 @@ export const defaultCatalog: Catalog = {
       group: 'REHAU',
       enabled: true,
       buildFrom: 'inside',
+      colorGroupId: 'CG-PVC',
       glazingIds: ['GL-24-STD'],
       hardwareVariantIds: ['HW-TT-STD', 'HW-TURN-STD'],
       paramIds: ['PAR-HANDLE-COLOR', 'PAR-CHILD-LOCK'],
@@ -306,24 +313,24 @@ export const defaultCatalog: Catalog = {
         {
           id: 'SP-BL60-FRAME', name: 'Рама 58 Blitz', enabled: true, role: 'frame', materialId: 'M-BL60-FRAME',
           spec: [
-            spec('M-BL60-FRAME', { base: 'length', dim: '1D', step: 1 }),
-            spec('M-REINF-FRAME', { base: 'length', dim: '1D', size: -60, step: 5, colorRule: 'none' }),
-            spec('M-SEAL-FRAME', { base: 'length', dim: '1D', step: 1, colorRule: 'none' }),
+            spec('M-BL60-FRAME', { base: 'length', step: 1 }),
+            spec('M-REINF-FRAME', { base: 'length', size: -60, step: 5, colorRule: 'none' }),
+            spec('M-SEAL-FRAME', { base: 'length', step: 1, colorRule: 'none' }),
           ],
         },
         {
           id: 'SP-BL60-SASH', name: 'Створка 96 Blitz', enabled: true, role: 'sash', materialId: 'M-BL60-SASH',
           spec: [
-            spec('M-BL60-SASH', { base: 'length', dim: '1D', step: 1 }),
-            spec('M-REINF-SASH', { base: 'length', dim: '1D', size: -50, step: 5, colorRule: 'none' }),
-            spec('M-SEAL-SASH', { base: 'length', dim: '1D', step: 1, colorRule: 'none' }),
+            spec('M-BL60-SASH', { base: 'length', step: 1 }),
+            spec('M-REINF-SASH', { base: 'length', size: -50, step: 5, colorRule: 'none' }),
+            spec('M-SEAL-SASH', { base: 'length', step: 1, colorRule: 'none' }),
           ],
         },
         {
           id: 'SP-BL60-IMPOST', name: 'Импост 76 Blitz', enabled: true, role: 'impost', materialId: 'M-BL60-IMPOST',
           spec: [
-            spec('M-BL60-IMPOST', { base: 'length', dim: '1D', step: 1 }),
-            spec('M-REINF-IMPOST', { base: 'length', dim: '1D', size: -30, step: 5, colorRule: 'none' }),
+            spec('M-BL60-IMPOST', { base: 'length', step: 1 }),
+            spec('M-REINF-IMPOST', { base: 'length', size: -30, step: 5, colorRule: 'none' }),
           ],
         },
       ],
@@ -344,23 +351,23 @@ export const defaultCatalog: Catalog = {
         {
           id: 'FL-BL60-FRAME', name: 'Заполнение / рама', enabled: true, target: 'frame', dW: 34, dH: 34,
           spec: [
-            spec('M-BL60-BEAD', { base: 'perimeter', dim: '1D', step: 1 }),
-            spec('M-SEAL-GLASS', { base: 'perimeter', dim: '1D', coef: 2, step: 1, colorRule: 'none' }),
-            spec('W-GLAZE', { base: 'area', dim: '0D', colorRule: 'none' }),
+            spec('M-BL60-BEAD', { base: 'perimeter', step: 1 }),
+            spec('M-SEAL-GLASS', { base: 'perimeter', coef: 2, step: 1, colorRule: 'none' }),
+            spec('W-GLAZE', { base: 'area', colorRule: 'none' }),
           ],
         },
         {
           id: 'FL-BL60-SASH', name: 'Заполнение / створка', enabled: true, target: 'sash', dW: 34, dH: 34,
           spec: [
-            spec('M-BL60-BEAD', { base: 'perimeter', dim: '1D', step: 1 }),
-            spec('M-SEAL-GLASS', { base: 'perimeter', dim: '1D', coef: 2, step: 1, colorRule: 'none' }),
-            spec('W-GLAZE', { base: 'area', dim: '0D', colorRule: 'none' }),
+            spec('M-BL60-BEAD', { base: 'perimeter', step: 1 }),
+            spec('M-SEAL-GLASS', { base: 'perimeter', coef: 2, step: 1, colorRule: 'none' }),
+            spec('W-GLAZE', { base: 'area', colorRule: 'none' }),
           ],
         },
       ],
       spec: [
-        spec('W-WELD', { base: 'total', dim: '0D', count: 4, colorRule: 'none' }),
-        spec('W-ASSEMBLY', { base: 'area', dim: '0D', colorRule: 'none' }),
+        spec('W-WELD', { base: 'total', count: 4, colorRule: 'none' }),
+        spec('W-ASSEMBLY', { base: 'area', colorRule: 'none' }),
       ],
     },
   ],

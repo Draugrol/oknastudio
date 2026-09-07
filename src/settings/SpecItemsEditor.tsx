@@ -3,7 +3,7 @@
  * Колонки повторяют IT Окна: Артикул, Цвет, Кол, Вид расчёта, Размер, Коэфф., Шаг, Тэг.
  */
 import { useState } from 'react'
-import type { CalcBase, CalcDim, Catalog, SpecItem } from '../core/types'
+import type { CalcBase, Catalog, MaterialKind, SpecItem } from '../core/types'
 import { CheckCell, NumCell, RowToolbar, SelectCell, TextCell } from './grid'
 import { ConditionsEditor, conditionsText } from './ConditionsEditor'
 import { newId } from '../store/catalog'
@@ -17,30 +17,30 @@ export const BASE_OPTIONS: { value: CalcBase; label: string }[] = [
   { value: 'area', label: 'Площадь' },
 ]
 
-const DIM_OPTIONS: { value: CalcDim; label: string }[] = [
-  { value: '1D', label: '1D длинновой' },
-  { value: '2D', label: '2D листовой' },
-  { value: '0D', label: '0D штучный' },
-]
-
 const COLOR_OPTIONS = [
-  { value: 'own', label: 'Свой цвет' },
-  { value: 'asBase', label: 'Как артикул 1' },
+  { value: 'asBase', label: 'По цвету изделия' },
   { value: 'none', label: 'Без цвета' },
 ]
+
+/** Что даёт строка: размерность берётся из типа материала. */
+const KIND_RESULT: Record<MaterialKind, string> = {
+  profile: 'длина, м',
+  sheet: 'лист, м²',
+  piece: 'штуки',
+  work: 'работа',
+}
 
 export function newSpecItem(materialId: string): SpecItem {
   return {
     id: newId('SI'),
     enabled: true,
     materialId,
-    colorRule: 'own',
+    colorRule: 'asBase',
     count: 1,
     base: 'length',
     size: 0,
     coef: 1,
     step: 0,
-    dim: '1D',
     conditions: [],
   }
 }
@@ -90,6 +90,10 @@ export function SpecItemsEditor({
           })
         }
       />
+      <p className="formula">
+        Размер детали = Округл((База + Размер) × Коэфф., Шаг). Кол — количество на единицу базы.
+        Длинновой / листовой / штучный определяется типом материала.
+      </p>
       <table className="grid edit">
         <thead>
           <tr>
@@ -101,7 +105,7 @@ export function SpecItemsEditor({
             <th className="w-num">Размер</th>
             <th className="w-num">Коэфф.</th>
             <th className="w-num">Шаг</th>
-            <th className="w-dim">Размерность</th>
+            <th className="w-dim">Считается в</th>
             <th className="w-params">Параметры</th>
             <th className="w-tag">Тэг</th>
           </tr>
@@ -139,12 +143,8 @@ export function SpecItemsEditor({
               <td><NumCell value={item.size} onChange={(v) => patch(item.id, { size: v })} /></td>
               <td><NumCell value={item.coef} step={0.001} onChange={(v) => patch(item.id, { coef: v })} /></td>
               <td><NumCell value={item.step} onChange={(v) => patch(item.id, { step: v })} /></td>
-              <td>
-                <SelectCell
-                  value={item.dim}
-                  options={DIM_OPTIONS}
-                  onChange={(v) => patch(item.id, { dim: v as CalcDim })}
-                />
+              <td className="muted">
+                {KIND_RESULT[catalog.materials.find((m) => m.id === item.materialId)?.kind ?? 'piece']}
               </td>
               <td className="muted cond-text">{conditionsText(item.conditions, catalog) || '—'}</td>
               <td><TextCell value={item.tag ?? ''} onChange={(v) => patch(item.id, { tag: v })} /></td>

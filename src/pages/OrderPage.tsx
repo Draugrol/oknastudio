@@ -6,6 +6,7 @@ import { calcOrder } from '../core/order'
 import { useCatalog } from '../store/catalog'
 import { Drawing } from '../editor/Drawing'
 import { newProduct } from '../core/scene'
+import { colorById } from '../core/geometry'
 
 export function OrderPage() {
   const { orderId = '' } = useParams()
@@ -106,7 +107,7 @@ export function OrderPage() {
                 </h3>
                 <p className="muted">
                   {item.width} × {item.height} мм · {item.qty} шт ·{' '}
-                  {catalog.colors.find((c) => c.id === item.colorId)?.name}
+                  {colorById(catalog, item.colorId)?.name ?? '—'}
                 </p>
                 <p className="muted">
                   Створок: {calc.contours.filter((c) => c.kind === 'sash').length} · СП:{' '}

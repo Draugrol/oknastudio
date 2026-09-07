@@ -49,6 +49,15 @@ export function findSystem(catalog: Catalog, id: string): ProfileSystem {
   return s
 }
 
+/** Цвет по идентификатору — ищется во всех цветовых группах. */
+export function colorById(catalog: Catalog, id: string) {
+  for (const group of catalog.colorGroups) {
+    const found = group.colors.find((c) => c.id === id)
+    if (found) return found
+  }
+  return undefined
+}
+
 export function materialById(catalog: Catalog, id: string): Material {
   const m = catalog.materials.find((x) => x.id === id)
   if (!m) throw new Error(`Материал не найден: ${id}`)

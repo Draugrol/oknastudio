@@ -9,6 +9,7 @@
 import { useRef } from 'react'
 import type { CalcResult, ProductInput, Rect } from '../core/types'
 import { useCatalog } from '../store/catalog'
+import { colorById } from '../core/geometry'
 
 interface Props {
   input: ProductInput
@@ -29,7 +30,7 @@ export function Drawing({ input, calc, selectedId, onSelect, onMoveSplit, compac
   const H = input.height
   const margin = compact ? Math.max(W, H) * 0.03 : Math.max(140, Math.max(W, H) * 0.13)
   const fs = Math.max(W, H) / (compact ? 26 : 44)
-  const color = catalog.colors.find((c) => c.id === input.colorId) ?? catalog.colors[0]
+  const color = colorById(catalog, input.colorId) ?? catalog.colorGroups[0]?.colors[0]
 
   const frame = calc.contours.find((c) => c.kind === 'frame')!
   const sashes = calc.contours.filter((c) => c.kind === 'sash')
@@ -102,18 +103,18 @@ export function Drawing({ input, calc, selectedId, onSelect, onMoveSplit, compac
       })}
 
       {/* Рама */}
-      <path d={ring(frame.rect, frame.light)} fillRule="evenodd" fill={color.render.outer} stroke={color.render.edge} strokeWidth={Math.max(1.5, W / 600)} />
+      <path d={ring(frame.rect, frame.light)} fillRule="evenodd" fill={color?.render.outer ?? '#f0f2f5'} stroke={color?.render.edge ?? '#b9c2cc'} strokeWidth={Math.max(1.5, W / 600)} />
 
       {/* Импосты */}
       {imposts.map((el) => {
         const r = toSvg(el.rect)
-        return <rect key={el.id} x={r.x} y={r.y} width={r.w} height={r.h} fill={color.render.outer} stroke={color.render.edge} strokeWidth={Math.max(1.5, W / 600)} />
+        return <rect key={el.id} x={r.x} y={r.y} width={r.w} height={r.h} fill={color?.render.outer ?? '#f0f2f5'} stroke={color?.render.edge ?? '#b9c2cc'} strokeWidth={Math.max(1.5, W / 600)} />
       })}
 
       {/* Створки */}
       {sashes.map((c) => (
         <g key={c.id}>
-          <path d={ring(c.rect, c.light)} fillRule="evenodd" fill={color.render.inner} stroke={color.render.edge} strokeWidth={Math.max(1.5, W / 600)} />
+          <path d={ring(c.rect, c.light)} fillRule="evenodd" fill={color?.render.inner ?? '#e9edf1'} stroke={color?.render.edge ?? '#b9c2cc'} strokeWidth={Math.max(1.5, W / 600)} />
           <OpeningSymbol contour={c} H={H} stroke="#4b5b6b" width={Math.max(1.2, W / 900)} />
           <Handle contour={c} H={H} />
         </g>
