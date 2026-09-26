@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# собранный одним файлом билд (npm run build:single) — артефакт, не исходник
+oknastudio.html
 .vite/
 *.local
 .DS_Store
