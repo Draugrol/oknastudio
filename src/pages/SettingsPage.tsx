@@ -203,6 +203,13 @@ function ParamsEditor({ catalog, update }: { catalog: Catalog; update: Update })
 
   return (
     <section>
+      <div className="section-head">
+        <h2>Параметры</h2>
+        <p>
+          Пользовательские параметры: задаются в конструкторе у изделия или у створки, а строки
+          спецификации и позиции комплектов фурнитуры отбираются условиями вида [Цвет ручки = Белый].
+        </p>
+      </div>
       <RowToolbar
         title="Параметры"
         hasSelection={!!param}
@@ -352,10 +359,6 @@ function ParamsEditor({ catalog, update }: { catalog: Catalog; update: Update })
           </table>
         </div>
       )}
-      <p className="hint">
-        Параметры задаются в конструкторе (у изделия или у створки), а строки спецификации и
-        комплектов фурнитуры отбираются условиями вида [Цвет ручки = Белый].
-      </p>
     </section>
   )
 }
@@ -382,10 +385,14 @@ function MaterialsEditor({ catalog, update }: { catalog: Catalog; update: Update
 
   return (
     <section>
-      <p className="hint banner">
-        Тип размера материала (длинновой / листовой / штучный / работа) определяет, как он считается
-        в спецификации — в самой строке спецификации это не задаётся.
-      </p>
+      <div className="section-head">
+        <h2>Материалы</h2>
+        <p>
+          Единый список артикулов. Тип размера (длинновой / листовой / штучный / работа) определяет,
+          как материал считается в спецификации — в самой строке спецификации это не задаётся.
+          Цветовая группа открывает таблицу цен по цветам внизу.
+        </p>
+      </div>
       <RowToolbar
         title="Материалы"
         hasSelection={!!selected}
@@ -547,10 +554,13 @@ function ColorsEditor({ catalog, update }: { catalog: Catalog; update: Update })
 
   return (
     <section>
-      <p className="hint banner">
-        Цветовая группа — это набор цветов, в которых существует материал. Цена каждого цвета
-        задаётся в карточке материала («Материалы» → «Цены по цветам»), никаких коэффициентов.
-      </p>
+      <div className="section-head">
+        <h2>Цвета</h2>
+        <p>
+          Цветовая группа — набор цветов, в которых существует материал. Цена каждого цвета задаётся
+          в карточке материала («Материалы» → «Цены по цветам»), коэффициентов нет.
+        </p>
+      </div>
       <RowToolbar
         title="Цветовые группы"
         hasSelection={!!group}
@@ -699,6 +709,13 @@ function GlazingsEditor({ catalog, update }: { catalog: Catalog; update: Update 
 
   return (
     <section>
+      <div className="section-head">
+        <h2>Заполнения</h2>
+        <p>
+          Состав стеклопакета и его применимость. Применимость проверяется на вычисленном размере СП,
+          а не на габарите изделия.
+        </p>
+      </div>
       <RowToolbar
         title="Стеклопакеты"
         hasSelection={!!glazing}
@@ -869,6 +886,13 @@ function HardwareEditor({ catalog, update }: { catalog: Catalog; update: Update 
 
   return (
     <section>
+      <div className="section-head">
+        <h2>Фурнитура</h2>
+        <p>
+          Варианты комплектации и диапазоны фальца. Состав диапазона отбирается условиями по
+          параметрам — так одна комплектация даёт разные ручки и опции.
+        </p>
+      </div>
       <RowToolbar
         title="Варианты комплектации"
         hasSelection={!!variant}

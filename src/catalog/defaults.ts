@@ -97,7 +97,7 @@ export const defaultCatalog: Catalog = {
   colorGroups: [
     {
       id: 'CG-PVC',
-      name: 'Цвета ПВХ-профиля',
+      name: 'Цвета ПВХ',
       colors: [
         { id: 'COL-WHITE', name: 'Белый', code: '9016', render: { outer: '#f4f6f8', inner: '#e9edf1', edge: '#b9c2cc' } },
         { id: 'COL-OAK', name: 'Золотой дуб (ламинация снаружи)', code: '2178', render: { outer: '#b4823a', inner: '#eef1f4', edge: '#8a6a3a' } },

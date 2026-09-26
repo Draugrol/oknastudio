@@ -32,7 +32,12 @@ export function OrdersPage() {
       <header className="page-head">
         <h1>Журнал заказов</h1>
         <div className="toolbar">
-          <input placeholder="Поиск: номер, клиент, адрес" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input
+            className="search"
+            placeholder="Поиск: номер, клиент, адрес"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Все статусы</option>
             {ORDER_STATUSES.map((s) => (

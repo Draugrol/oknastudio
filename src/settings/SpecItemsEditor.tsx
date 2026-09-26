@@ -18,7 +18,7 @@ export const BASE_OPTIONS: { value: CalcBase; label: string }[] = [
 ]
 
 const COLOR_OPTIONS = [
-  { value: 'asBase', label: 'По цвету изделия' },
+  { value: 'asBase', label: 'По цвету' },
   { value: 'none', label: 'Без цвета' },
 ]
 

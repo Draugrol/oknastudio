@@ -59,15 +59,19 @@ export function SystemEditor({
 
   return (
     <div className="sys-editor">
-      <div className="tabs sub">
+      <div className="steps">
         {TABS.map((t, i) => (
-          <button key={t} className={t === tab ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
-            {i > 0 ? `${i}. ${t}` : t}
+          <button key={t} className={t === tab ? 'step active' : 'step'} onClick={() => setTab(t)}>
+            {i > 0 && <span className="n">{i}</span>}
+            {t}
           </button>
         ))}
       </div>
 
-      <p className="tab-hint">{TAB_HINT[tab]}</p>
+      <div className="section-head">
+        <h2>{tab}</h2>
+        <p>{TAB_HINT[tab]}</p>
+      </div>
 
       {tab === 'Общие' && (
         <section className="card">

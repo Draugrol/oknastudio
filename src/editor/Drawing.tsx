@@ -28,7 +28,7 @@ export function Drawing({ input, calc, selectedId, onSelect, onMoveSplit, compac
 
   const W = input.width
   const H = input.height
-  const margin = compact ? Math.max(W, H) * 0.03 : Math.max(140, Math.max(W, H) * 0.13)
+  const margin = compact ? Math.max(W, H) * 0.03 : Math.max(110, Math.max(W, H) * 0.095)
   const fs = Math.max(W, H) / (compact ? 26 : 44)
   const color = colorById(catalog, input.colorId) ?? catalog.colorGroups[0]?.colors[0]
 
